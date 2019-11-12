@@ -25,10 +25,11 @@ def collector(subsystem):
     subsystem.main()
 
 if __name__ == '__main__':
-    #TODO: change this hack
+    #TODO: change these hacks
+    os.chdir("/usr/src/kernels/{0}".format(os.uname()[2]))
     sys.path.insert(0, '/tmp/bcc_collector')
     threads = list()
-    for i in ['opensnoop']:
+    for i in ['biolatency', 'execsnoop']:
         t = threading.Thread(target=collector, args=(i,))
         threads.append(t)
         t.start()
