@@ -20,6 +20,7 @@ import sys
 import os
 import threading
 import time
+import json
 
 # define BPF program
 bpf_text = """
@@ -65,7 +66,9 @@ int trace_req_done(struct pt_regs *ctx, struct request *req)
 }
 """
 
-def collect(bpfilter):
+sock = None
+
+def collect(sock, bpfilter):
     bpfinfo = dict()
     bpfinfo['name'] = 'bpf'
     bpfinfo['fields'] = dict()
@@ -80,17 +83,27 @@ def collect(bpfilter):
         lowerend = getattr(key, dist.Key._fields_[1][0])
         bpfinfo['tags']['disk'] = str(diskname) or ""
         bpfinfo['fields']['le'] = 2**(int(lowerend) - 1)
-        print(bpfinfo)
+        with threading.Lock():
+            sock.sendall("{0}\n".format(json.dumps(bpfinfo)))
     dist.clear()
 
 def main():
+    global sock
     # load BPF program
     b = BPF(text=bpf_text)
-    if BPF.get_kprobe_functions(b'blk_start_request'):
-        b.attach_kprobe(event="blk_start_request", fn_name="trace_req_start")
-    b.attach_kprobe(event="blk_mq_start_request", fn_name="trace_req_start")
-    b.attach_kprobe(event="blk_account_io_done", fn_name="trace_req_done")
+    with threading.Lock():
+        if BPF.get_kprobe_functions(b'blk_start_request'):
+            b.attach_kprobe(event="blk_start_request", fn_name="trace_req_start")
+        b.attach_kprobe(event="blk_mq_start_request", fn_name="trace_req_start")
+        b.attach_kprobe(event="blk_account_io_done", fn_name="trace_req_done")
+
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.connect('/var/run/telegraf.sock')
+    except socket.error, msg:
+        print(msg)
+        sys.exit(1)
     ticker = threading.Event()
     while not ticker.wait(5):
-        collect(b)
+        collect(sock, b)
 

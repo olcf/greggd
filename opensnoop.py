@@ -25,6 +25,9 @@ from datetime import datetime, timedelta
 import os
 import threading
 import time
+import socket
+import sys
+import json
 
 # define BPF program
 bpf_text = """
@@ -98,6 +101,8 @@ int trace_return(struct pt_regs *ctx)
 }
 """
 
+sock = None
+
 TASK_COMM_LEN = 16    # linux/sched.h
 NAME_MAX = 255        # linux/limits.h
 
@@ -140,14 +145,24 @@ def collect(cpu, data, size):
     bpfinfo['tags']['process'] = event.comm
     bpfinfo['fields']['fd'] = fd_s
     bpfinfo['fields']['flags'] = "{0:08o}".format(event.flags)
-    print(bpfinfo)
+    #print(bpfinfo)
+    with threading.Lock():
+        sock.sendall("{0}\n".format(json.dumps(bpfinfo)))
 
 def main():
+    global sock
     # load BPF program
     b = BPF(text=bpf_text)
-    b.attach_kprobe(event="do_sys_open", fn_name="trace_entry")
-    b.attach_kretprobe(event="do_sys_open", fn_name="trace_return")
+    with threading.Lock():
+        b.attach_kprobe(event="do_sys_open", fn_name="trace_entry")
+        b.attach_kretprobe(event="do_sys_open", fn_name="trace_return")
 
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.connect('/var/run/telegraf.sock')
+    except socket.error, msg:
+        print(msg)
+        sys.exit(1)
     b["events"].open_perf_buffer(collect, page_cnt=64)
     ticker = threading.Event()
     while not ticker.wait(5):
