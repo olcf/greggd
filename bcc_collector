@@ -13,24 +13,230 @@ import sys
 import os
 import importlib
 from os.path import dirname, join, abspath
+import configargparse
+import glob
+import yaml
+from collections import defaultdict
 
-def collector(subsystem):
-    modname = "collectors.{0}".format(subsystem)
-    try:
-        subsystem = importlib.import_module(modname, package='bcc_collector')
-    except ModuleNotFoundError:
-        print("subsystem {0} not found".format(modname))
+from bcc import ArgString, BPF
+from bcc.utils import ArgString, printb
+from bcc.table import HashTable
+
+sock = None
+
+def fix_value(value):
+    # special characters and keyword replacements for line protocol
+    if not isinstance(value, str):
+        return value
+    value = value.replace(',', '\\,')
+    value = value.replace('=', '\\=')
+    value = value.replace(' ', '\\ ')
+    return value
+
+def send_message(tags, fields):
+    tags = dict((k, v) for k, v in tags.items() if v)
+    fields = dict((k, v) for k, v in fields.items() if v)
+    message="{0},{1} {2} {3}000000000".format(
+        'bpf',
+        ','.join(['{0}={1}'.format(k, fix_value(v)) for k,v in tags.items()]),
+        ','.join(['{0}={1}'.format(k, fix_value(v)) for k,v in fields.items()]),
+        int(time.time()))
+    with threading.Lock():
+        sock.sendall("{0}\n".format(message))
+
+def collect_biolatency(bpfilter):
+    bpfinfo = dict()
+    bpfinfo['name'] = 'bpf'
+    bpfinfo['fields'] = dict()
+    bpfinfo['tags'] = dict()
+    bpfinfo['tags']['sensor'] = 'biolatency'
+
+    dist = bpfilter.get_table("dist")
+
+    for key, value in dist.items():
+        diskname = getattr(key, dist.Key._fields_[0][0])
+        lowerend = getattr(key, dist.Key._fields_[1][0])
+        if diskname:
+            bpfinfo['tags']['disk'] = str(diskname)
+        bpfinfo['fields']['le'] = 2**(int(lowerend) - 1)
+        send_message(bpfinfo['tags'], bpfinfo['fields'])
+    dist.clear()
+
+# execsnoop data structs
+TASK_COMM_LEN = 16      # linux/sched.h
+ARGSIZE = 128           # should match #define in C above
+
+class DataExec(ct.Structure):
+    _fields_ = [
+        ("pid", ct.c_uint),
+        ("ppid", ct.c_uint),
+        ("uid", ct.c_uint32),
+        ("comm", ct.c_char * TASK_COMM_LEN),
+        ("type", ct.c_int),
+        ("argv", ct.c_char * ARGSIZE),
+        ("retval", ct.c_int),
+    ]
+
+class EventType(object):
+    EVENT_ARG = 0
+    EVENT_RET = 1
+
+argv = defaultdict(list)
+
+def collect_execsnoop(cpu, data, size):
+    event = ct.cast(data, ct.POINTER(DataExec)).contents
+
+    if event.type == EventType.EVENT_ARG:
+        argv[event.pid].append(event.argv)
+    elif event.type == EventType.EVENT_RET:
+        argv[event.pid] = [
+            "\"" + arg.replace("\"", "\\\"") + "\""
+            for arg in argv[event.pid]
+        ]
+
+        ppid = event.ppid if event.ppid > 0 else -1
+        argv_text = b' '.join(argv[event.pid]).replace(b'\n', b'\\n')
+        bpfinfo = dict()
+        bpfinfo['name'] = 'bpf'
+        bpfinfo['fields'] = dict()
+        bpfinfo['tags'] = dict()
+        bpfinfo['tags']['sensor'] = 'execsnoop'
+        bpfinfo['tags']['ppid'] = ppid
+        bpfinfo['tags']['pid'] = int(event.pid)
+        bpfinfo['tags']['uid'] = int(event.uid)
+        bpfinfo['tags']['process'] = event.comm
+        bpfinfo['fields']['retval'] = event.retval
+        bpfinfo['fields']['argv_text'] =  b' '.join(argv[event.pid]).replace(b'\n', b'\\n')
+        send_message(bpfinfo['tags'], bpfinfo['fields'])
+        try:
+            del(argv[event.pid])
+        except Exception:
+            pass
+
+# opensnoop
+NAME_MAX = 255        # linux/limits.h
+
+class DataOpen(ct.Structure):
+    _fields_ = [
+        ("id", ct.c_ulonglong),
+        ("ts", ct.c_ulonglong),
+        ("uid", ct.c_uint32),
+        ("ret", ct.c_int),
+        ("comm", ct.c_char * TASK_COMM_LEN),
+        ("fname", ct.c_char * NAME_MAX),
+        ("flags", ct.c_int),
+    ]
+
+def collect_opensnoop(cpu, data, size):
+    event = ct.cast(data, ct.POINTER(DataOpen)).contents
+
+    # split return value into FD and errno columns
+    if event.ret >= 0:
+        fd_s = event.ret
+        err = 0
+    else:
+        fd_s = -1
+        err = - event.ret
+
+    fname = event.fname
+    if fname.startswith('/proc/'):
         return
+    bpfinfo = dict()
+    bpfinfo['name'] = 'bpf'
+    bpfinfo['fields'] = dict()
+    bpfinfo['tags'] = dict()
+    bpfinfo['tags']['sensor'] = 'opensnoop'
+    bpfinfo['tags']['errno'] = err
+    bpfinfo['tags']['pid'] = int(event.id >> 32)
+    bpfinfo['tags']['uid'] = int(event.uid)
+    bpfinfo['tags']['fname'] = fname
+    bpfinfo['tags']['process'] = event.comm
+    bpfinfo['fields']['fd'] = fd_s
+    bpfinfo['fields']['flags'] = "{0:08o}".format(event.flags)
+    send_message(bpfinfo['tags'], bpfinfo['fields'])
 
-    subsystem.main()
+def collector(config, subsystem):
+    modname = subsystem[:-2].split('/')[-1]
+
+    bpf_text = ""
+    with open(subsystem, 'r') as fd:
+        bpf_text = fd.read()
+    b = BPF(text=bpf_text)
+
+    try:
+        for kprobe in config['collectors'][modname]['kprobes']:
+            hook = kprobe.keys()[0]
+            func = kprobe[hook]
+            with threading.Lock():
+                b.attach_kprobe(event=hook, fn_name=func)
+    except KeyError:
+        pass
+
+    try:
+        for kprobe in config['collectors'][modname]['kretprobes']:
+            hook = kprobe.keys()[0]
+            func = kprobe[hook]
+            with threading.Lock():
+                b.attach_kretprobe(event=hook, fn_name=func)
+    except KeyError:
+        pass
+
+    # thought we were done with hacks? dj_khaled.jpg
+    # need to break out the common pieces in the future...
+    if modname in ["execsnoop", "opensnoop"]:
+        b["events"].open_perf_buffer(globals()["collect_"+modname], page_cnt=64)
+    ticker = threading.Event()
+    while not ticker.wait(5):
+        if modname in ["execsnoop", "opensnoop"]:
+            b.perf_buffer_poll()
+        else:
+            collect_biolatency(b)
+
+def is_dir(path):
+    if not os.path.isdir(path):
+        raise argparse.ArgumentTypeError("Path is not a directory")
+    else:
+        return os.path.abspath(os.path.realpath(os.path.expanduser(path)))
+
+def get_args():
+    """Parses and returns arguments to the program"""
+
+    yamlparse = configargparse.YAMLConfigFileParser
+
+    parser = configargparse.ArgParser(default_config_files=['/etc/greggd/conf.yaml',
+        '/etc/greggd/conf.d/*.conf',
+        '/etc/greggd/conf.d/*.yaml'],
+        args_for_setting_config_path=['-c', '--config'],
+        config_file_parser_class=yamlparse)
+    parser.add_argument(
+        '-d',
+        '--dir',
+        type=str,
+        help='Directory for C source queries',
+        default='/usr/share/greggd/c')
+
+    args = [x for x in parser.parse_known_args()]
+    content = '\n'.join([fd.read() for fd in parser._open_config_files(args[0]._get_kwargs())])
+    config = yaml.safe_load(content)
+
+    # Return all variable values
+    return args, config
 
 if __name__ == '__main__':
+    args, config = get_args()
+
     #TODO: change these hacks
     os.chdir("/usr/src/kernels/{0}".format(os.uname()[2]))
     sys.path.insert(0, '/tmp/bcc_collector')
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.connect('/var/run/telegraf.sock')
+    except socket.error, msg:
+        sys.exit(1)
     threads = list()
-    for i in ['biolatency', 'execsnoop']:
-        t = threading.Thread(target=collector, args=(i,))
+
+    for fname in glob.glob("{0}/*.c".format(config['dir'])):
+        t = threading.Thread(target=collector, args=(config, fname))
         threads.append(t)
         t.start()
 
