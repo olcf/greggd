@@ -1,0 +1,27 @@
+---
+
+# Socket to open
+socketPath: /run/greggd.sock
+
+# Hash of all programs to load
+programs:
+    # Path to program source
+  - source: /path/to/src.c
+    # Events to bind program to
+    events:
+        # This is a kprobe type. Run the program's function `do_sync` on
+        # `sys_clone` kernel events
+      - type: kprobe
+        loadFunc: do_sync
+        attachTo: sys_clone
+        # This is a kprobe type. Run the program's function `do_sync` on
+        # `sys_clone` kernel events
+      - type: tracepoint
+        loadFunc: do_sync
+        attachTo: tracepoint
+    # What should we read from
+    outputs:
+      - type: BPF_PERF_OUTPUT
+        id: first_output
+      - type: BPF_HASH
+        id: second_output

@@ -2,10 +2,8 @@ package config
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
-	"os"
 
 	"gopkg.in/yaml.v2"
 )
@@ -48,15 +46,16 @@ func ParseConfig(input io.Reader) (*GreggdConfig, error) {
 	buf := bytes.NewBuffer([]byte{})
 	_, err := buf.ReadFrom(input)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "config.go: Error reading input to buffer: %s", err)
+		return nil, fmt.Errorf("\nconfig.go: Error reading input to buffer:\n%s",
+			err)
 	}
 
 	configStruct := GreggdConfig{}
 	err = yaml.Unmarshal(buf.Bytes(), &configStruct)
 	if err != nil {
-		fmt.Fprintf(os.Stderr,
-			"config.go: Error unmarshalling config into struct: %s", err)
+		return nil, fmt.Errorf(
+			"\nconfig.go: Error unmarshalling config into struct:\n%s", err)
 	}
 
-	return nil, errors.New("hi")
+	return &configStruct, nil
 }
