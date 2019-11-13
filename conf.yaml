@@ -11,7 +11,7 @@ collectors:
       - sys_execve: "syscall__execve"
     kretprobes:
       - sys_execve: "do_ret_sys_execve"
-  iosnoop:
+  opensnoop:
     kprobes:
       - do_sys_open: "trace_entry"
     kretprobes:
