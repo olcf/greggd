@@ -49,7 +49,6 @@ func ParseConfig(input io.Reader) (*GreggdConfig, error) {
 	_, err := buf.ReadFrom(input)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "config.go: Error reading input to buffer: %s", err)
-		os.Exit(1)
 	}
 
 	configStruct := GreggdConfig{}
@@ -57,7 +56,6 @@ func ParseConfig(input io.Reader) (*GreggdConfig, error) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr,
 			"config.go: Error unmarshalling config into struct: %s", err)
-		os.Exit(1)
 	}
 
 	return nil, errors.New("hi")
