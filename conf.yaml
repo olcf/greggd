@@ -1,0 +1,19 @@
+---
+dir: "/usr/share/greggd/c/"
+collectors:
+  biolatency:
+    kprobes:
+      - blk_start_request: "trace_req_start"
+      - blk_mq_start_request: "trace_req_start"
+      - blk_account_io_done: "trace_req_done"
+  execsnoop:
+    kprobes:
+      - sys_execve: "syscall__execve"
+    kretprobes:
+      - sys_execve: "do_ret_sys_execve"
+  iosnoop:
+    kprobes:
+      - do_sys_open: "trace_entry"
+    kretprobes:
+      - do_sys_open: "trace_return"
+...
