@@ -32,7 +32,7 @@ type BPFEvent struct {
 	// Name of the function to load into eBPF VM for this event
 	LoadFunc string `yaml:"loadFunc"`
 	// What eBPF object we're attaching this function to
-	AttachTo string `yaml:"AttachTo"`
+	AttachTo string `yaml:"attachTo"`
 }
 
 type BPFOutput struct {
