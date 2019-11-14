@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -14,6 +15,14 @@ import (
 
 func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 	m *bcc.Module, errChan chan error) {
+
+	// Build type
+	outputType, err := buildStructFromArray(output.Format)
+	if err != nil {
+		errChan <- fmt.Errorf("tracer.go: Error building output struct: %s\n", err)
+		return
+	}
+	outputStruct := reflect.New(outputType)
 
 	dataChan := make(chan []byte, 1000)
 	uppercaseType := strings.ToUpper(output.Type)
@@ -26,19 +35,18 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 			return
 		}
 		perfMap.Start()
-		output := make(map[string]interface{})
 		for {
 			select {
 			case <-ctx.Done():
 				fmt.Println("Done")
 				return
 			case inputBytes := <-dataChan:
-				err := json.Unmarshal(inputBytes, &output)
+				err := json.Unmarshal(inputBytes, &outputStruct)
 				if err != nil {
 					errChan <- fmt.Errorf("tracer.go: Error parsing output: %s\n", err)
 					return
 				}
-				fmt.Printf("%d\n", output)
+				fmt.Printf("%d\n", outputStruct)
 			}
 		}
 		perfMap.Stop()
@@ -46,6 +54,36 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 		errChan <- fmt.Errorf("tracer.go: Output type %s is not supported",
 			output.Type)
 	}
+}
+
+// Use reflect package to live build a new type for binary output unmarshalling
+func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type, error) {
+
+	var fields []reflect.StructField
+	for _, item := range inputArray {
+		switch item.Type {
+		case "u64":
+			fields = append(fields, reflect.StructField{
+				Name: strings.Title(item.Name), Type: reflect.TypeOf(uint64(0)),
+			})
+		case "u32":
+			fields = append(fields, reflect.StructField{
+				Name: strings.Title(item.Name), Type: reflect.TypeOf(uint32(0)),
+			})
+		case "int":
+			fields = append(fields, reflect.StructField{
+				Name: strings.Title(item.Name), Type: reflect.TypeOf(int(0)),
+			})
+		case "char[]":
+			fields = append(fields, reflect.StructField{
+				Name: strings.Title(item.Name), Type: reflect.TypeOf([]byte{0}),
+			})
+		default:
+			return nil, fmt.Errorf("tracer.go: Format type %s is not supported", item.Type)
+		}
+	}
+	newType := reflect.StructOf(fields)
+	return newType, nil
 }
 
 func attachAndLoadEvent(event config.BPFEvent, m *bcc.Module) error {

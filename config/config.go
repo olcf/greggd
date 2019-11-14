@@ -47,8 +47,8 @@ type BPFOutput struct {
 }
 
 type BPFOutputFormat struct {
-	// ID of the value in the struct
-	Id string `yaml:"id"`
+	// Name of the value in the struct
+	Name string `yaml:"name"`
 	// Type of the value
 	Type string `yaml:"type"`
 }
