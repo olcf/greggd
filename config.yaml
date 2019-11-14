@@ -5,23 +5,43 @@ socketPath: /run/greggd.sock
 
 # Hash of all programs to load
 programs:
-    # Path to program source
-  - source: /path/to/src.c
+  - source: ./csrc/opensnoop.c
     # Events to bind program to
     events:
-        # This is a kprobe type. Run the program's function `do_sync` on
-        # `sys_clone` kernel events
       - type: kprobe
-        loadFunc: do_sync
-        attachTo: sys_clone
-        # This is a kprobe type. Run the program's function `do_sync` on
-        # `sys_clone` kernel events
-      - type: tracepoint
-        loadFunc: do_sync
-        attachTo: tracepoint
+        loadFunc: trace_entry
+        attachTo: sys_open
+      - type: kretprobe
+        loadFunc: trace_return
+        attachTo: sys_open
     # What should we read from
     outputs:
       - type: BPF_PERF_OUTPUT
-        id: first_output
+        id: events
+        format:
+          - name: id
+            type: u64
+          - name: ts
+            type: u64
+          - name: uid
+            type: u32
+          - name: ret
+            type: int
+          - name: comm
+            type: char[16] # TASK_COMM_LEN
+          - name: fname
+            type: char[16] # TASK_COMM_LEN
+          - name: flags
+            type: int
       - type: BPF_HASH
-        id: second_output
+        id: hash
+        poll: 1s
+        format:
+          - name: id
+            type: u64
+          - name: comm
+            type: char[16] # TASK_COMM_LEN
+          - name: fname
+            type: char[16] # TASK_COMM_LEN
+          - name: flags
+            type: int

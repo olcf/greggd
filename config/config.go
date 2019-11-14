@@ -40,6 +40,17 @@ type BPFOutput struct {
 	Id string `yaml:"id"`
 	// What table type this is
 	Type string `yaml:"type"`
+	// If not perf output, how often to poll output
+	Poll string `yaml:"poll"`
+	// Format of the struct
+	Format []BPFOutputFormat `yaml:"format"`
+}
+
+type BPFOutputFormat struct {
+	// ID of the value in the struct
+	Id string `yaml:"id"`
+	// Type of the value
+	Type string `yaml:"type"`
 }
 
 func ParseConfig(input io.Reader) (*GreggdConfig, error) {
