@@ -22,9 +22,11 @@ from bcc import ArgString, BPF
 from bcc.utils import ArgString, printb
 from bcc.table import HashTable
 
+debug = True
+
 sock = None
 
-def fix_value(value):
+def fix_tag(value):
     # special characters and keyword replacements for line protocol
     if not isinstance(value, str):
         return value
@@ -33,15 +35,25 @@ def fix_value(value):
     value = value.replace(' ', '\\ ')
     return value
 
+# telegraf/issues/5460
+def fix_field(value):
+    # special characters and keyword replacements for line protocol
+    if not isinstance(value, str):
+        return value
+    value = value.replace('\\', '\\\\')
+    value = value.replace('"', '\\"')
+    return '"{0}"'.format(value)
+
 def send_message(tags, fields):
-    tags = dict((k, v) for k, v in tags.items() if v)
-    fields = dict((k, v) for k, v in fields.items() if v)
+    tags = dict((k, fix_tag(v)) for k, v in tags.items() if v is not None and v is not "")
+    fields = dict((k, fix_field(v)) for k, v in fields.items() if v is not None and v is not "")
     message="{0},{1} {2} {3}000000000".format(
         'bpf',
-        ','.join(['{0}={1}'.format(k, fix_value(v)) for k,v in tags.items()]),
-        ','.join(['{0}={1}'.format(k, fix_value(v)) for k,v in fields.items()]),
+        ','.join(['{0}={1}'.format(k, v) for k,v in tags.items()]),
+        ','.join(['{0}={1}'.format(k, v) for k,v in fields.items()]),
         int(time.time()))
     with threading.Lock():
+        debug and print("> {0}".format(message))
         sock.sendall("{0}\n".format(message))
 
 def collect_biolatency(bpfilter):
@@ -60,6 +72,26 @@ def collect_biolatency(bpfilter):
             bpfinfo['tags']['disk'] = str(diskname)
         bpfinfo['fields']['le'] = 2**(int(lowerend) - 1)
         send_message(bpfinfo['tags'], bpfinfo['fields'])
+    dist.clear()
+
+# cachestat
+def collect_cachestat(bpfilter):
+    bpfinfo = dict()
+    bpfinfo['tags'] = dict()
+    bpfinfo['tags']['sensor'] = 'cachestat'
+    dist = bpfilter.get_table("dist")
+
+    counts = dict.fromkeys(["mark_page_accessed", "mark_buffer_dirty", "add_to_page_cache_lru", "account_page_dirtied"], 0)
+    for k, v in sorted(dist.items(), key=lambda dist: dist[1].value):
+        func = bpfilter.ksym(k.ip)
+        counts[func] = int(max(0, v.value))
+    counts["total"] = counts["mark_page_accessed"] - counts["mark_buffer_dirty"]
+    counts["misses"] = counts["add_to_page_cache_lru"] - counts["account_page_dirtied"]
+    counts["hits"] = counts["total"] - counts["misses"]
+    counts["misses"] = counts["total"] if counts["hits"] < 0 else counts["misses"]
+    counts["hits"] = 0 if counts["hits"] < 0 else counts["hits"]
+
+    send_message(bpfinfo['tags'], counts)
     dist.clear()
 
 # execsnoop data structs
@@ -89,13 +121,8 @@ def collect_execsnoop(cpu, data, size):
     if event.type == EventType.EVENT_ARG:
         argv[event.pid].append(event.argv)
     elif event.type == EventType.EVENT_RET:
-        argv[event.pid] = [
-            "\"" + arg.replace("\"", "\\\"") + "\""
-            for arg in argv[event.pid]
-        ]
-
         ppid = event.ppid if event.ppid > 0 else -1
-        argv_text = b' '.join(argv[event.pid]).replace(b'\n', b'\\n')
+        argv_text = b' '.join(argv[event.pid]).replace(b'\n', b' ')
         bpfinfo = dict()
         bpfinfo['name'] = 'bpf'
         bpfinfo['fields'] = dict()
@@ -106,7 +133,7 @@ def collect_execsnoop(cpu, data, size):
         bpfinfo['tags']['uid'] = int(event.uid)
         bpfinfo['tags']['process'] = event.comm
         bpfinfo['fields']['retval'] = event.retval
-        bpfinfo['fields']['argv_text'] =  b' '.join(argv[event.pid]).replace(b'\n', b'\\n')
+        bpfinfo['fields']['argv_text'] = argv_text
         send_message(bpfinfo['tags'], bpfinfo['fields'])
         try:
             del(argv[event.pid])
@@ -190,7 +217,7 @@ def collector(config, subsystem):
         if modname in ["execsnoop", "opensnoop"]:
             b.perf_buffer_poll()
         else:
-            collect_biolatency(b)
+            globals()["collect_"+modname](b)
 
 def is_dir(path):
     if not os.path.isdir(path):
