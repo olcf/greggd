@@ -66,11 +66,13 @@ def collect_biolatency(bpfilter):
     dist = bpfilter.get_table("dist")
 
     for key, value in dist.items():
-        diskname = getattr(key, dist.Key._fields_[0][0])
-        lowerend = getattr(key, dist.Key._fields_[1][0])
+        diskname = str(getattr(key, dist.Key._fields_[0][0]))
+        lowerend = int(getattr(key, dist.Key._fields_[1][0]))
+
         if diskname:
             bpfinfo['tags']['disk'] = str(diskname)
-        bpfinfo['fields']['le'] = 2**(int(lowerend) - 1)
+        bpfinfo['tags']['le'] = 2**(lowerend - 1)
+        bpfinfo['fields']['count'] = value.value
         send_message(bpfinfo['tags'], bpfinfo['fields'])
     dist.clear()
 
