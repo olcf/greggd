@@ -6,6 +6,7 @@ collectors:
       - blk_start_request: "trace_req_start"
       - blk_mq_start_request: "trace_req_start"
       - blk_account_io_done: "trace_req_done"
+    table: true
   execsnoop:
     kprobes:
       - sys_execve: "syscall__execve"
@@ -16,4 +17,13 @@ collectors:
       - do_sys_open: "trace_entry"
     kretprobes:
       - do_sys_open: "trace_return"
+  cachestat:
+    kprobes:
+      - add_to_page_cache_lru: "do_count"
+      - mark_page_accessed: "do_count"
+      - account_page_dirtied: "do_count"
+      - mark_buffer_dirty: "do_count"
+  tcplife:
+    kprobes:
+      - sys_execve: "kprobe__tcp_set_state"
 ...
