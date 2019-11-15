@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"reflect"
 	"strconv"
 	"strings"
@@ -17,7 +18,10 @@ import (
 )
 
 func pollOutputMaps(ctx context.Context, output config.BPFOutput,
-	m *bcc.Module, errChan chan error) {
+	m *bcc.Module, errChan chan error, c net.Conn, mux *sync.Mutex,
+	wg *sync.WaitGroup) {
+
+	defer wg.Done()
 
 	// Build type
 	outputType, err := buildStructFromArray(output.Format)
@@ -51,9 +55,15 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 					return
 				}
 				// Get influx-like output
-				outputString := printOutput(outputStruct)
+				outputString := formatOutput(outputStruct)
 				// Get raw JSON output, does not convert byte arrays to strings
 				outputJson, _ := json.Marshal(outputStruct.Interface())
+
+				err = sendOutputToSock(outputString, mux, c)
+				if err != nil {
+					errChan <- err
+					return
+				}
 				fmt.Println(outputString)
 				fmt.Printf("%s\n", outputJson)
 			}
@@ -65,8 +75,19 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 	}
 }
 
+func sendOutputToSock(outString string, mux *sync.Mutex, c net.Conn) error {
+	mux.Lock()
+	defer mux.Unlock()
+
+	_, err := c.Write([]byte(outString))
+	if err != nil {
+		return fmt.Errorf("tracer.go: Error sending output to socket: %s\n", err)
+	}
+	return nil
+}
+
 // Loop over each struct, write output in Influx-like Format
-func printOutput(outputStruct reflect.Value) string {
+func formatOutput(outputStruct reflect.Value) string {
 	outputString := ""
 	for i := 0; i < outputStruct.NumField(); i++ {
 		fieldKind := outputStruct.Type().Field(i)
@@ -189,7 +210,7 @@ func attachAndLoadEvent(event config.BPFEvent, m *bcc.Module) error {
 }
 
 func Trace(ctx context.Context, program config.BPFProgram,
-	errChan chan error, wg *sync.WaitGroup) {
+	errChan chan error, sockAddr string, mux *sync.Mutex, wg *sync.WaitGroup) {
 	// Close waitgroup whenever we exit
 	defer wg.Done()
 
@@ -213,8 +234,18 @@ func Trace(ctx context.Context, program config.BPFProgram,
 		}
 	}
 
+	// Open Socket
+	c, err := net.Dial("unix", sockAddr)
+	if err != nil {
+		errChan <- fmt.Errorf("tracer.go: Error dialing socket %s: %s\n",
+			sockAddr, err)
+		return
+	}
+
 	// Load and watch  output maps
 	for _, output := range program.Outputs {
-		pollOutputMaps(ctx, output, m, errChan)
+		wg.Add(1)
+		go pollOutputMaps(ctx, output, m, errChan, c, mux, wg)
 	}
+	wg.Wait()
 }

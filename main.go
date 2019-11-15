@@ -68,12 +68,13 @@ Greggd collects and exports low-level tracing data from the eBPF in-kernel virtu
 
 	// Create wait group to watch goroutine progress
 	var wg sync.WaitGroup
+	var mux sync.Mutex
 
 	// Create goroutine for each program, increment number of running procs, do
 	// the work
 	for _, program := range configStruct.Programs {
 		wg.Add(1)
-		go tracer.Trace(ctx, program, errChan, &wg)
+		go tracer.Trace(ctx, program, errChan, configStruct.SocketPath, &mux, &wg)
 	}
 
 	// Watch for sig-term or errors
