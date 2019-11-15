@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"reflect"
@@ -42,14 +43,19 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 				fmt.Println("Done")
 				return
 			case inputBytes := <-dataChan:
-				fmt.Printf("%+v\n", inputBytes)
 				outputStruct := reflect.New(outputType).Elem()
-				err = binary.Read(bytes.NewBuffer(inputBytes), bcc.GetHostByteOrder(), outputStruct.Addr().Interface())
+				err = binary.Read(bytes.NewBuffer(inputBytes), bcc.GetHostByteOrder(),
+					outputStruct.Addr().Interface())
 				if err != nil {
 					errChan <- fmt.Errorf("tracer.go: Error parsing output: %s\n", err)
 					return
 				}
-				fmt.Printf("%+v\n", outputStruct)
+				// Get influx-like output
+				outputString := printOutput(outputStruct)
+				// Get raw JSON output, does not convert byte arrays to strings
+				outputJson, _ := json.Marshal(outputStruct.Interface())
+				fmt.Println(outputString)
+				fmt.Printf("%s\n", outputJson)
 			}
 		}
 		perfMap.Stop()
@@ -59,8 +65,27 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 	}
 }
 
+// Loop over each struct, write output in Influx-like Format
+func printOutput(outputStruct reflect.Value) string {
+	outputString := ""
+	for i := 0; i < outputStruct.NumField(); i++ {
+		fieldKind := outputStruct.Type().Field(i)
+		fieldVal := outputStruct.Field(i)
+		if fieldKind.Type.Kind() == reflect.Array {
+			stringVal := string(fieldVal.Slice(0, fieldVal.Len()).Bytes())
+			outputString = fmt.Sprintf("%s%v=%v, ", outputString,
+				fieldKind.Name, stringVal)
+		} else {
+			outputString = fmt.Sprintf("%s%v=%v, ", outputString, fieldKind.Name,
+				fieldVal)
+		}
+	}
+	return outputString
+}
+
 // Use reflect package to live build a new type for binary output unmarshalling
-func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type, error) {
+func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type,
+	error) {
 
 	var fields []reflect.StructField
 	var intSize int

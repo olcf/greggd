@@ -57,6 +57,7 @@ Greggd collects and exports low-level tracing data from the eBPF in-kernel virtu
 
 	// Create background context with cancel function
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Open channel to catch exit signals
 	sig := make(chan os.Signal, 1)
@@ -86,5 +87,5 @@ Greggd collects and exports low-level tracing data from the eBPF in-kernel virtu
 	// Cancel running routines
 	cancel()
 	// Wait until goroutines exited
-	wg.Wait()
+	//wg.Wait()
 }
