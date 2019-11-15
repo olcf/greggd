@@ -1,11 +1,13 @@
 package tracer
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -22,7 +24,6 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 		errChan <- fmt.Errorf("tracer.go: Error building output struct: %s\n", err)
 		return
 	}
-	outputStruct := reflect.New(outputType)
 
 	dataChan := make(chan []byte, 1000)
 	uppercaseType := strings.ToUpper(output.Type)
@@ -41,12 +42,14 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 				fmt.Println("Done")
 				return
 			case inputBytes := <-dataChan:
-				err := json.Unmarshal(inputBytes, &outputStruct)
+				fmt.Printf("%+v\n", inputBytes)
+				outputStruct := reflect.New(outputType).Elem()
+				err = binary.Read(bytes.NewBuffer(inputBytes), bcc.GetHostByteOrder(), outputStruct.Addr().Interface())
 				if err != nil {
 					errChan <- fmt.Errorf("tracer.go: Error parsing output: %s\n", err)
 					return
 				}
-				fmt.Printf("%d\n", outputStruct)
+				fmt.Printf("%+v\n", outputStruct)
 			}
 		}
 		perfMap.Stop()
@@ -60,26 +63,46 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type, error) {
 
 	var fields []reflect.StructField
+	var intSize int
+	var err error
 	for _, item := range inputArray {
-		switch item.Type {
+		isArray := false
+		itemTypeString := item.Type
+		if strings.ContainsAny(itemTypeString, "[") {
+			isArray = true
+			sizeArr := strings.Split(strings.Split(itemTypeString, "]")[0], "[")
+			size := sizeArr[len(sizeArr)-1]
+			intSize, err = strconv.Atoi(size)
+			if err != nil {
+				return nil, fmt.Errorf("tracer.go: Error converting size %s to int", size)
+			}
+			// Overwrite itemTypeString with non-array name
+			itemTypeString = strings.Split(itemTypeString, "[")[0]
+		}
+		var itemType interface{}
+		switch itemTypeString {
 		case "u64":
-			fields = append(fields, reflect.StructField{
-				Name: strings.Title(item.Name), Type: reflect.TypeOf(uint64(0)),
-			})
+			itemType = uint64(0)
 		case "u32":
-			fields = append(fields, reflect.StructField{
-				Name: strings.Title(item.Name), Type: reflect.TypeOf(uint32(0)),
-			})
+			itemType = uint32(0)
 		case "int":
-			fields = append(fields, reflect.StructField{
-				Name: strings.Title(item.Name), Type: reflect.TypeOf(int(0)),
-			})
-		case "char[]":
-			fields = append(fields, reflect.StructField{
-				Name: strings.Title(item.Name), Type: reflect.TypeOf([]byte{0}),
-			})
+			itemType = int(0)
+		case "int32":
+			itemType = int32(0)
+		case "char":
+			itemType = byte(0)
 		default:
 			return nil, fmt.Errorf("tracer.go: Format type %s is not supported", item.Type)
+		}
+		if isArray {
+			fields = append(fields, reflect.StructField{
+				Name: strings.Title(item.Name), Type: reflect.ArrayOf(intSize,
+					reflect.TypeOf(itemType)),
+			})
+		} else {
+			fields = append(fields, reflect.StructField{
+				Name: strings.Title(item.Name), Type: reflect.TypeOf(itemType),
+			})
 		}
 	}
 	newType := reflect.StructOf(fields)

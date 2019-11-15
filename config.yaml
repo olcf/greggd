@@ -26,22 +26,22 @@ programs:
           - name: uid
             type: u32
           - name: ret
-            type: int
+            type: int32
           - name: comm
-            type: char[16] # TASK_COMM_LEN
+            type: char[16]
           - name: fname
-            type: char[16] # TASK_COMM_LEN
+            type: char[255]
           - name: flags
-            type: int
-      - type: BPF_HASH
-        id: hash
-        poll: 1s
-        format:
-          - name: id
-            type: u64
-          - name: comm
-            type: char[16] # TASK_COMM_LEN
-          - name: fname
-            type: char[16] # TASK_COMM_LEN
-          - name: flags
-            type: int
+            type: int32
+            #      - type: BPF_HASH
+            #        id: hash
+            #        poll: 1s
+            #        format:
+            #          - name: id
+            #            type: u64
+            #          - name: comm
+            #            type: char[]
+            #          - name: fname
+            #            type: char[]
+            #          - name: flags
+            #            type: int
