@@ -81,7 +81,7 @@ Greggd collects and exports low-level tracing data from the eBPF in-kernel virtu
 	// the work
 	for _, program := range configStruct.Programs {
 		wg.Add(1)
-		go tracer.Trace(ctx, program, errChan, configStruct.SocketPath, &mux, &wg)
+		go tracer.Trace(ctx, program, errChan, configStruct, &mux, &wg)
 	}
 
 	// Watch for sig-term or errors

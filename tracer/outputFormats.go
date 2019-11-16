@@ -11,13 +11,15 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/olcf/greggd/config"
 	bcc "github.com/josephvoss/gobpf/bcc"
 )
 
 func readPerfChannel(ctx context.Context, outType reflect.Type,
-	dataChan chan []byte, errChan chan error, c net.Conn, mux *sync.Mutex) {
+	dataChan chan []byte, errChan chan error, verbose bool, c net.Conn,
+	mux *sync.Mutex) {
 
 	for {
 		select {
@@ -38,8 +40,10 @@ func readPerfChannel(ctx context.Context, outType reflect.Type,
 			outputJson, _ := json.Marshal(outputStruct.Interface())
 
 			sendOutputToSock(outputString, errChan, mux, c)
-			fmt.Println(outputString)
-			fmt.Printf("%s\n", outputJson)
+			if verbose {
+				fmt.Println(outputString)
+				fmt.Printf("%s\n", outputJson)
+			}
 		}
 	}
 }
@@ -61,24 +65,24 @@ func sendOutputToSock(outString string, errChan chan error, mux *sync.Mutex,
 // Loop over each struct, write output in Influx-like format. Convert arrays to
 // strings. Assumes all arrays are byte strings.
 func formatOutput(outputStruct reflect.Value) string {
-	outputString := ""
+	var sb strings.Builder
 	for i := 0; i < outputStruct.NumField(); i++ {
 		fieldKind := outputStruct.Type().Field(i)
 		fieldVal := outputStruct.Field(i)
 		if fieldKind.Type.Kind() == reflect.Array {
 			stringVal := string(fieldVal.Slice(0, fieldVal.Len()).Bytes())
-			outputString = fmt.Sprintf("%s%v=%v, ", outputString,
-				fieldKind.Name, stringVal)
+			sb.WriteString(fmt.Sprintf("%v=%v", fieldKind.Name, stringVal))
 		} else {
-			outputString = fmt.Sprintf("%s%v=%v, ", outputString, fieldKind.Name,
-				fieldVal)
+			sb.WriteString(fmt.Sprintf("%v=%v", fieldKind.Name, fieldVal))
 		}
-		// Strip suffix
+		// If we're not the last entry, add separators. If we are, add timestamp
 		if i == outputStruct.NumField()-1 {
-			outputString = strings.TrimSuffix(outputString, ", ")
+			sb.WriteString(fmt.Sprintf(", %d\n", time.Now().UnixNano()))
+		} else {
+			sb.WriteString(", ")
 		}
 	}
-	return outputString
+	return sb.String()
 }
 
 // Use reflect package to build a new type for binary output unmarshalling at

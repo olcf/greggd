@@ -15,7 +15,7 @@ import (
 // Watch each configured memory map. Read perf events as they are sent.
 // Otherwise output contents of memory maps as a poll
 func pollOutputMaps(ctx context.Context, output config.BPFOutput,
-	m *bcc.Module, errChan chan error, c net.Conn, mux *sync.Mutex,
+	m *bcc.Module, errChan chan error, verbose bool, c net.Conn, mux *sync.Mutex,
 	wg *sync.WaitGroup) {
 
 	defer wg.Done()
@@ -46,7 +46,7 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 		perfMap.Start()
 		// Set up listening on the output perf map channel. Needs to accept ctx
 		// cancel
-		readPerfChannel(ctx, outputType, dataChan, errChan, c, mux)
+		readPerfChannel(ctx, outputType, dataChan, errChan, verbose, c, mux)
 		perfMap.Stop()
 	case "BPF_HASH":
 	case "BPF_HISTOGRAM":
@@ -111,7 +111,8 @@ func attachAndLoadEvent(event config.BPFEvent, m *bcc.Module) error {
 }
 
 func Trace(ctx context.Context, program config.BPFProgram,
-	errChan chan error, sockAddr string, mux *sync.Mutex, wg *sync.WaitGroup) {
+	errChan chan error, configStruct *config.GreggdConfig, mux *sync.Mutex,
+	wg *sync.WaitGroup) {
 	// Close waitgroup whenever we exit
 	defer wg.Done()
 
@@ -136,17 +137,17 @@ func Trace(ctx context.Context, program config.BPFProgram,
 	}
 
 	// Open Socket
-	c, err := net.Dial("unix", sockAddr)
+	c, err := net.Dial("unix", configStruct.SocketPath)
 	if err != nil {
 		errChan <- fmt.Errorf("tracer.go: Error dialing socket %s: %s\n",
-			sockAddr, err)
+			configStruct.SocketPath, err)
 		return
 	}
 
 	// Load and watch  output maps
 	for _, output := range program.Outputs {
 		wg.Add(1)
-		go pollOutputMaps(ctx, output, m, errChan, c, mux, wg)
+		go pollOutputMaps(ctx, output, m, errChan, configStruct.Verbose, c, mux, wg)
 	}
 	wg.Wait()
 }
