@@ -27,11 +27,17 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 		return
 	}
 
-	dataChan := make(chan []byte, 1000)
+	dataChan := make(chan []byte)
 	uppercaseType := strings.ToUpper(output.Type)
+	if uppercaseType != "BPF_PERF_OUTPUT" && output.Poll == "" {
+		errChan <- fmt.Errorf(
+			"tracer.go: Watching non BPF_PERF_OUTPUT requires `poll` to be set")
+		return
+	}
+
+	table := bcc.NewTable(m.TableId(output.Id), m)
 	switch uppercaseType {
 	case "BPF_PERF_OUTPUT":
-		table := bcc.NewTable(m.TableId(output.Id), m)
 		perfMap, err := bcc.InitPerfMap(table, dataChan)
 		if err != nil {
 			errChan <- fmt.Errorf("tracer.go: Error building perf map: %s\n", err)
