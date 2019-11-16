@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"reflect"
 	"strconv"
@@ -17,10 +16,8 @@ import (
 	bcc "github.com/josephvoss/gobpf/bcc"
 )
 
-import "fmt"
-
 func readPerfChannel(ctx context.Context, outType reflect.Type,
-	dataChan chan []byte, errChan chan err, c net.Conn, mux *sync.Mutex) {
+	dataChan chan []byte, errChan chan error, c net.Conn, mux *sync.Mutex) {
 
 	for {
 		select {
@@ -29,7 +26,7 @@ func readPerfChannel(ctx context.Context, outType reflect.Type,
 			return
 		case inputBytes := <-dataChan:
 			outputStruct := reflect.New(outType).Elem()
-			err = binary.Read(bytes.NewBuffer(inputBytes), bcc.GetHostByteOrder(),
+			err := binary.Read(bytes.NewBuffer(inputBytes), bcc.GetHostByteOrder(),
 				outputStruct.Addr().Interface())
 			if err != nil {
 				errChan <- fmt.Errorf("tracer.go: Error parsing output: %s\n", err)
@@ -66,7 +63,8 @@ func sendOutputToSock(outString string, errChan chan error, mux *sync.Mutex,
 func formatOutput(outputStruct reflect.Value) string {
 	outputString := ""
 	for i := 0; i < outputStruct.NumField(); i++ {
-		fieldKind := outputStruct.Type().Field(i) fieldVal := outputStruct.Field(i)
+		fieldKind := outputStruct.Type().Field(i)
+		fieldVal := outputStruct.Field(i)
 		if fieldKind.Type.Kind() == reflect.Array {
 			stringVal := string(fieldVal.Slice(0, fieldVal.Len()).Bytes())
 			outputString = fmt.Sprintf("%s%v=%v, ", outputString,
@@ -77,7 +75,7 @@ func formatOutput(outputStruct reflect.Value) string {
 		}
 		// Strip suffix
 		if i == outputStruct.NumField()-1 {
-			outputString = outputString.Strip(", ")
+			outputString = strings.TrimSuffix(outputString, ", ")
 		}
 	}
 	return outputString
