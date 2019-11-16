@@ -16,6 +16,8 @@ import (
 var (
 	configPath = flag.String("config", "/etc/greggd.conf",
 		"Path to config file. Defaults to `/etc/greggd.conf`")
+	verbose = flag.Bool("v", false,
+		"Log messages to stdout. Can also be set in the config file")
 )
 
 // Parse the config file from input path
@@ -54,6 +56,11 @@ Greggd collects and exports low-level tracing data from the eBPF in-kernel virtu
 
 	// Load config
 	configStruct := parseConfig()
+
+	// If cli says verbose and config doesn't, set config to verbose
+	if *verbose && !configStruct.Verbose {
+		configStruct.Verbose = true
+	}
 
 	// Create background context with cancel function
 	ctx, cancel := context.WithCancel(context.Background())
