@@ -18,6 +18,7 @@ import struct
 import threading
 import time
 import yaml
+import communityid
 
 from bcc import ArgString, BPF
 from bcc.utils import ArgString, printb
@@ -235,7 +236,12 @@ def print_ipv4_event(cpu, data, size):
     bpfinfo['fields']['tx_b'] = event.tx_b
     bpfinfo['fields']['rx_b'] = event.rx_b
     bpfinfo['fields']['duration'] = event.span_us # microseconds
-
+    cid = communityid.CommunityID()
+    tpl = communityid.FlowTuple.make_tcp(bpfinfo['tags']['laddr'],
+        bpfinfo['tags']['raddr'],
+        bpfinfo['tags']['lport'],
+        bpfinfo['tags']['rport'])
+    bpfinfo['tags']['communityid'] = cid.calc(tpl)
     send_message(bpfinfo['tags'], bpfinfo['fields'])
 
 def print_ipv6_event(cpu, data, size):
@@ -258,6 +264,12 @@ def print_ipv6_event(cpu, data, size):
     bpfinfo['fields']['tx_b'] = event.tx_b
     bpfinfo['fields']['rx_b'] = event.rx_b
     bpfinfo['fields']['duration'] = event.span_us # microseconds
+    cid = communityid.CommunityID()
+    tpl = communityid.FlowTuple.make_tcp(bpfinfo['tags']['laddr'],
+        bpfinfo['tags']['raddr'],
+        bpfinfo['tags']['lport'],
+        bpfinfo['tags']['rport'])
+    bpfinfo['tags']['communityid'] = cid.calc(tpl)
 
     send_message(bpfinfo['tags'], bpfinfo['fields'])
 
