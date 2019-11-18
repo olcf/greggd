@@ -18,8 +18,8 @@ import (
 )
 
 func readPerfChannel(ctx context.Context, outType reflect.Type,
-	dataChan chan []byte, errChan chan error, verbose bool, c net.Conn,
-	mux *sync.Mutex) {
+	dataChan chan []byte, errChan chan error, verbose bool, mapName string,
+	c net.Conn, mux *sync.Mutex) {
 
 	for {
 		select {
@@ -35,7 +35,7 @@ func readPerfChannel(ctx context.Context, outType reflect.Type,
 				return
 			}
 			// Get influx-like output
-			outputString := formatOutput(outputStruct)
+			outputString := formatOutput(mapName, outputStruct)
 			// Get raw JSON output, does not convert byte arrays to strings
 			outputJson, _ := json.Marshal(outputStruct.Interface())
 
@@ -64,22 +64,24 @@ func sendOutputToSock(outString string, errChan chan error, mux *sync.Mutex,
 
 // Loop over each struct, write output in Influx-like format. Convert arrays to
 // strings. Assumes all arrays are byte strings.
-func formatOutput(outputStruct reflect.Value) string {
+func formatOutput(mapName string, outputStruct reflect.Value) string {
 	var sb strings.Builder
+	sb.WriteString(mapName)
+	sb.WriteString(" ")
 	for i := 0; i < outputStruct.NumField(); i++ {
 		fieldKind := outputStruct.Type().Field(i)
 		fieldVal := outputStruct.Field(i)
 		if fieldKind.Type.Kind() == reflect.Array {
 			stringVal := string(fieldVal.Slice(0, fieldVal.Len()).Bytes())
-			sb.WriteString(fmt.Sprintf("%v=%v", fieldKind.Name, stringVal))
+			sb.WriteString(fmt.Sprintf("%v=\"%v\"", fieldKind.Name, stringVal))
 		} else {
 			sb.WriteString(fmt.Sprintf("%v=%v", fieldKind.Name, fieldVal))
 		}
 		// If we're not the last entry, add separators. If we are, add timestamp
 		if i == outputStruct.NumField()-1 {
-			sb.WriteString(fmt.Sprintf(", %d\n", time.Now().UnixNano()))
+			sb.WriteString(fmt.Sprintf(" %d\n", time.Now().Unix()))
 		} else {
-			sb.WriteString(", ")
+			sb.WriteString(",")
 		}
 	}
 	return sb.String()
