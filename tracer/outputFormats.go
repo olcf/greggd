@@ -68,12 +68,16 @@ func formatOutput(mapName string, outputStruct reflect.Value) string {
 	var sb strings.Builder
 	sb.WriteString(mapName)
 	sb.WriteString(" ")
+	// Loop over struct fields
 	for i := 0; i < outputStruct.NumField(); i++ {
+		// Get data type and value of the field
 		fieldKind := outputStruct.Type().Field(i)
 		fieldVal := outputStruct.Field(i)
+		// If it's an array, assume it's a byte array. Convert to string
 		if fieldKind.Type.Kind() == reflect.Array {
 			stringVal := string(fieldVal.Slice(0, fieldVal.Len()).Bytes())
 			sb.WriteString(fmt.Sprintf("%v=\"%v\"", fieldKind.Name, stringVal))
+			// Otherwise, just write the key name and the value
 		} else {
 			sb.WriteString(fmt.Sprintf("%v=%v", fieldKind.Name, fieldVal))
 		}
@@ -95,9 +99,11 @@ func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type,
 	var fields []reflect.StructField
 	var intSize int
 	var err error
+	// Use data types from array to build struct fields
 	for _, item := range inputArray {
 		isArray := false
 		itemTypeString := item.Type
+		// Figure out if this is an array. Set isArray and get array size
 		if strings.ContainsAny(itemTypeString, "[") {
 			isArray = true
 			sizeArr := strings.Split(strings.Split(itemTypeString, "]")[0], "[")
@@ -110,6 +116,7 @@ func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type,
 			// Overwrite itemTypeString with non-array name
 			itemTypeString = strings.Split(itemTypeString, "[")[0]
 		}
+		// Get item type
 		var itemType interface{}
 		switch itemTypeString {
 		case "u64":
@@ -126,6 +133,7 @@ func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type,
 			return nil, fmt.Errorf("tracer.go: Format type %s is not supported",
 				item.Type)
 		}
+		// Create struct fields for correct data type
 		if isArray {
 			fields = append(fields, reflect.StructField{
 				Name: strings.Title(item.Name), Type: reflect.ArrayOf(intSize,
@@ -137,6 +145,6 @@ func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type,
 			})
 		}
 	}
-	newType := reflect.StructOf(fields)
-	return newType, nil
+	// Build struct
+	return reflect.StructOf(fields), nil
 }
