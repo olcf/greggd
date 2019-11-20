@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/olcf/greggd/config"
 	bcc "github.com/josephvoss/gobpf/bcc"
@@ -49,6 +50,16 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 		readPerfChannel(ctx, outputType, dataChan, errChan, verbose, output.Id, c, mux)
 		perfMap.Stop()
 	case "BPF_HASH":
+		sleepDuration, err := time.ParseDuration(output.Poll)
+		if err != nil {
+			errChan <- fmt.Errorf("tracer.go: Error parsing poll time %s: %s\n",
+				output.Poll, err)
+			return
+		}
+		for {
+			iterateHashMap(ctx, table, outputType, errChan, verbose, c, mux)
+			time.Sleep(sleepDuration)
+		}
 	case "BPF_HISTOGRAM":
 	default:
 		errChan <- fmt.Errorf("tracer.go: Output type %s is not supported",

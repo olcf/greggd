@@ -27,24 +27,79 @@ func readPerfChannel(ctx context.Context, outType reflect.Type,
 			fmt.Println("Done")
 			return
 		case inputBytes := <-dataChan:
-			outputStruct := reflect.New(outType).Elem()
-			err := binary.Read(bytes.NewBuffer(inputBytes), bcc.GetHostByteOrder(),
-				outputStruct.Addr().Interface())
-			if err != nil {
-				errChan <- fmt.Errorf("tracer.go: Error parsing output: %s\n", err)
-				return
-			}
-			// Get influx-like output
-			outputString := formatOutput(mapName, outputStruct)
-			// Get raw JSON output, does not convert byte arrays to strings
-			outputJson, _ := json.Marshal(outputStruct.Interface())
-
-			sendOutputToSock(outputString, errChan, mux, c)
-			if verbose {
-				fmt.Println(outputString)
-				fmt.Printf("%s\n", outputJson)
-			}
+			sendBytesToSock(ctx, outType, inputBytes, errChan, verbose, mapName, c,
+				mux)
 		}
+	}
+}
+
+func iterateHashMap(ctx context.Context, table *bcc.Table,
+	outType reflect.Type, errChan chan error, verbose bool, c net.Conn,
+	mux *sync.Mutex) {
+
+	// Get table iterator and iterate over keys
+	tableIter := table.Iter()
+
+	for {
+		// Write values to byte buffer
+		buf := bytes.NewBuffer([]byte{})
+
+		// Iterate. Break if no more keys
+		if !tableIter.Next() {
+			// Should we send this error on, or just break and move on?
+			//errChan <- fmt.Errorf("tracer.go: Error iterating table %s: %s\n",
+			//	table.ID(), tableIter.Err())
+			//return
+			break
+		}
+		val, err := table.Get(tableIter.Key())
+		if err != nil {
+			errChan <- fmt.Errorf("tracer.go: Error getting key %s from table: %s\n",
+				tableIter.Key(), table.ID(), tableIter.Err())
+			return
+		}
+		// Write to buffer. Should also check that write size == reflect size
+		_, err = buf.Write(val)
+		if err != nil {
+			errChan <- fmt.Errorf("tracer.go: Error writing binary to buffer: %s\n",
+				err)
+			return
+		}
+		// Write data to struct and send it on
+		sendBytesToSock(ctx, outType, buf.Bytes(), errChan, verbose, table.ID(), c,
+			mux)
+	}
+
+	return
+
+}
+
+// Read in data, write to a new struct object of reflect type, format and send
+// to socket
+func sendBytesToSock(ctx context.Context, outType reflect.Type,
+	inBytes []byte, errChan chan error, verbose bool, mapName string,
+	c net.Conn, mux *sync.Mutex) {
+
+	// Build out struct
+	outputStruct := reflect.New(outType).Elem()
+
+	// Load input bytes into output struct
+	err := binary.Read(bytes.NewBuffer(inBytes), bcc.GetHostByteOrder(),
+		outputStruct.Addr().Interface())
+	if err != nil {
+		errChan <- fmt.Errorf("tracer.go: Error parsing output: %s\n", err)
+		return
+	}
+
+	// Get influx-like output
+	outputString := formatOutput(mapName, outputStruct)
+	// Get raw JSON output, does not convert byte arrays to strings
+	outputJson, _ := json.Marshal(outputStruct.Interface())
+
+	sendOutputToSock(outputString, errChan, mux, c)
+	if verbose {
+		fmt.Println(outputString)
+		fmt.Printf("%s\n", outputJson)
 	}
 }
 
