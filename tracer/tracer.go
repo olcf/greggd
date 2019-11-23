@@ -15,7 +15,7 @@ import (
 // Watch each configured memory map. Read perf events as they are sent.
 // Otherwise output contents of memory maps as a poll
 func pollOutputMaps(ctx context.Context, output config.BPFOutput,
-	m *bcc.Module, errChan chan error, verbose bool, c net.Conn, mux *sync.Mutex,
+	m *bcc.Module, errChan chan error, verbose bool, verboseFormat string, c net.Conn, mux *sync.Mutex,
 	wg *sync.WaitGroup) {
 
 	defer wg.Done()
@@ -28,6 +28,8 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 	}
 
 	dataChan := make(chan []byte)
+	defer close(dataChan)
+
 	uppercaseType := strings.ToUpper(output.Type)
 	if uppercaseType != "BPF_PERF_OUTPUT" && output.Poll == "" {
 		errChan <- fmt.Errorf(
@@ -46,7 +48,7 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 		perfMap.Start()
 		// Set up listening on the output perf map channel. Needs to accept ctx
 		// cancel
-		readPerfChannel(ctx, outputType, dataChan, errChan, verbose, output.Id, c, mux)
+		readPerfChannel(ctx, outputType, dataChan, errChan, verbose, verboseFormat, output.Id, c, mux)
 		perfMap.Stop()
 	case "BPF_HASH":
 	case "BPF_HISTOGRAM":
@@ -147,7 +149,7 @@ func Trace(ctx context.Context, program config.BPFProgram,
 	// Load and watch  output maps
 	for _, output := range program.Outputs {
 		wg.Add(1)
-		go pollOutputMaps(ctx, output, m, errChan, configStruct.Verbose, c, mux, wg)
+		go pollOutputMaps(ctx, output, m, errChan, configStruct.Verbose, configStruct.VerboseFormat, c, mux, wg)
 	}
 	wg.Wait()
 }

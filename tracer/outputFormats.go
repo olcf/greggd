@@ -18,8 +18,8 @@ import (
 )
 
 func readPerfChannel(ctx context.Context, outType reflect.Type,
-	dataChan chan []byte, errChan chan error, verbose bool, mapName string,
-	c net.Conn, mux *sync.Mutex) {
+	dataChan chan []byte, errChan chan error, verbose bool, verboseFormat string,
+	mapName string, c net.Conn, mux *sync.Mutex) {
 
 	for {
 		select {
@@ -28,21 +28,30 @@ func readPerfChannel(ctx context.Context, outType reflect.Type,
 			return
 		case inputBytes := <-dataChan:
 			outputStruct := reflect.New(outType).Elem()
+
 			err := binary.Read(bytes.NewBuffer(inputBytes), bcc.GetHostByteOrder(),
 				outputStruct.Addr().Interface())
 			if err != nil {
 				errChan <- fmt.Errorf("tracer.go: Error parsing output: %s\n", err)
 				return
 			}
+
 			// Get influx-like output
-			outputString := formatOutput(mapName, outputStruct)
-			// Get raw JSON output, does not convert byte arrays to strings
-			outputJson, _ := json.Marshal(outputStruct.Interface())
+			outputString, err := formatOutput(mapName, outputStruct)
+			if err != nil {
+				continue
+			}
 
 			sendOutputToSock(outputString, errChan, mux, c)
 			if verbose {
-				fmt.Println(outputString)
-				fmt.Printf("%s\n", outputJson)
+				switch verboseFormat {
+				case "json":
+					// Get raw JSON output, does not convert byte arrays to strings
+					outputJson, _ := json.Marshal(outputStruct.Interface())
+					fmt.Printf("%s\n", outputJson)
+				default:
+					fmt.Printf(outputString)
+				}
 			}
 		}
 	}
@@ -62,29 +71,118 @@ func sendOutputToSock(outString string, errChan chan error, mux *sync.Mutex,
 	return nil
 }
 
+func formatValueField(value string) string {
+	value = strings.Replace(value, ",", "\\,", -1)
+	value = strings.Replace(value, "=", "\\=", -1)
+	value = strings.Replace(value, " ", "\\ ", -1)
+	return value
+}
+
+func escapeField(field string) string {
+	var sb strings.Builder
+
+	sb.WriteString("\"")
+	sb.WriteString(strings.Replace(field, "\"", "\\\"", -1))
+	sb.WriteString("\"")
+	return sb.String()
+}
+
+func isTag(tag string) bool {
+	switch tag {
+	case "pid", "uid", "fname", "process":
+		return true
+	}
+	return false
+}
+
+func formatTag(tag string) string {
+	var sb strings.Builder
+
+	sb.WriteString("\"")
+	sb.WriteString(tag)
+	sb.WriteString("\"")
+	return sb.String()
+}
+
+func handleSpecialValue(field string, value interface{}) string {
+	switch field {
+	case "flags":
+		return fmt.Sprintf("%#o", value)
+	}
+	return fmt.Sprintf("%v", value)
+}
+
 // Loop over each struct, write output in Influx-like format. Convert arrays to
 // strings. Assumes all arrays are byte strings.
-func formatOutput(mapName string, outputStruct reflect.Value) string {
+func formatOutput(mapName string, outputStruct reflect.Value) (string, error) {
+
+	tags := make(map[string]interface{})
+	fields := make(map[string]interface{})
+
 	var sb strings.Builder
-	sb.WriteString(mapName)
-	sb.WriteString(" ")
+
+	var err error
 	for i := 0; i < outputStruct.NumField(); i++ {
 		fieldKind := outputStruct.Type().Field(i)
 		fieldVal := outputStruct.Field(i)
+		fieldName := strings.ToLower(fieldKind.Name)
+
 		if fieldKind.Type.Kind() == reflect.Array {
-			stringVal := string(fieldVal.Slice(0, fieldVal.Len()).Bytes())
-			sb.WriteString(fmt.Sprintf("%v=\"%v\"", fieldKind.Name, stringVal))
+
+			bytesVal := fieldVal.Slice(0, fieldVal.Len()).Bytes()
+
+			n := bytes.IndexByte(bytesVal, 0)
+			stringVal := string(bytesVal[:n])
+
+			if len(stringVal) == 0 || strings.HasPrefix(stringVal, "/proc/") {
+				fmt.Sprintf("  Returning early. StringVal: %s\n", stringVal)
+				return "", err
+			}
+
+			if isTag(fieldName) {
+				tags[fieldName] = formatTag(stringVal)
+			} else {
+				fields[fieldName] = escapeField(stringVal)
+			}
 		} else {
-			sb.WriteString(fmt.Sprintf("%v=%v", fieldKind.Name, fieldVal))
-		}
-		// If we're not the last entry, add separators. If we are, add timestamp
-		if i == outputStruct.NumField()-1 {
-			sb.WriteString(fmt.Sprintf(" %d\n", time.Now().Unix()))
-		} else {
-			sb.WriteString(",")
+			if isTag(fieldName) {
+				tags[fieldName] = fieldVal
+			} else {
+				fields[fieldName] = fieldVal
+			}
 		}
 	}
-	return sb.String()
+
+	sb.WriteString(mapName)
+
+	nt, nf := len(tags), len(fields)
+
+	for k, v := range tags {
+		nt--
+		if nt >= 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString(formatValueField(k))
+		sb.WriteString("=")
+		sb.WriteString(formatValueField(fmt.Sprintf("%v", v)))
+	}
+	if nt == 0 {
+		sb.WriteString(" ")
+	}
+
+	for k, v := range fields {
+		nf--
+		if nf >= 0 && nf < (len(fields)-1) {
+			sb.WriteString(",")
+		}
+		sb.WriteString(formatValueField(k))
+		sb.WriteString("=")
+		sb.WriteString(handleSpecialValue(k, v))
+	}
+
+	sb.WriteString(fmt.Sprintf(" %d\n", time.Now().Unix()))
+
+	return sb.String(), nil
 }
 
 // Use reflect package to build a new type for binary output unmarshalling at
@@ -97,6 +195,7 @@ func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type,
 	var err error
 	for _, item := range inputArray {
 		isArray := false
+		intSize = 0
 		itemTypeString := item.Type
 		if strings.ContainsAny(itemTypeString, "[") {
 			isArray = true
@@ -126,6 +225,7 @@ func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type,
 			return nil, fmt.Errorf("tracer.go: Format type %s is not supported",
 				item.Type)
 		}
+
 		if isArray {
 			fields = append(fields, reflect.StructField{
 				Name: strings.Title(item.Name), Type: reflect.ArrayOf(intSize,

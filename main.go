@@ -68,10 +68,13 @@ Greggd collects and exports low-level tracing data from the eBPF in-kernel virtu
 
 	// Open channel to catch exit signals
 	sig := make(chan os.Signal, 1)
+	defer close(sig)
+
 	signal.Notify(sig, os.Interrupt, os.Kill)
 
 	// Open channel to catch goroutine errors
 	errChan := make(chan error)
+	defer close(errChan)
 
 	// Create wait group to watch goroutine progress
 	var wg sync.WaitGroup
