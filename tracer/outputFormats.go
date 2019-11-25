@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"net"
 	"reflect"
@@ -97,13 +96,10 @@ func sendBytesToSock(ctx context.Context, outType reflect.Type,
 
 	// Get influx-like output
 	outputString := formatOutput(mapName, outputStruct, tags)
-	// Get raw JSON output, does not convert byte arrays to strings
-	outputJson, _ := json.Marshal(outputStruct.Interface())
 
 	sendOutputToSock(outputString, errChan, mux, c)
 	if verbose {
 		fmt.Println(outputString)
-		fmt.Printf("%s\n", outputJson)
 	}
 }
 
