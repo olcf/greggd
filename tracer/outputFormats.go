@@ -67,7 +67,6 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 				err)
 			return
 		}
-		fmt.Printf("Key is %v\n", tableIter.Key())
 		// Write data to struct and send it on
 		sendBytesToSock(ctx, outType, buf.Bytes(), tags, errChan, verbose,
 			table.ID(), c, mux)
