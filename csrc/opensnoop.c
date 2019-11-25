@@ -14,7 +14,7 @@
 struct val_t {
     u64 id;
     char comm[TASK_COMM_LEN];
-    const char *fname;
+    char fname[NAME_MAX];
     int flags; // EXTENDED_STRUCT_MEMBER
 };
 
@@ -41,7 +41,7 @@ int trace_entry(struct pt_regs *ctx, int dfd, const char __user *filename, int f
 
     if (bpf_get_current_comm(&val.comm, sizeof(val.comm)) == 0) {
         val.id = id;
-        val.fname = filename;
+        bpf_probe_read_str(&val.fname, sizeof(val.fname), filename);
         val.flags = flags; // EXTENDED_STRUCT_MEMBER
         infotmp.update(&id, &val);
     }
@@ -62,8 +62,8 @@ int trace_return(struct pt_regs *ctx)
         // missed entry
         return 0;
     }
-    bpf_probe_read(&data.comm, sizeof(valp->comm), valp->comm);
-    bpf_probe_read(&data.fname, sizeof(valp->fname), valp->fname);
+    bpf_probe_read_str(&data.comm, sizeof(valp->comm), valp->comm);
+    bpf_probe_read_str(&data.fname, sizeof(valp->fname), valp->fname);
     data.id = valp->id;
     data.ts = tsp / 1000;
     data.uid = bpf_get_current_uid_gid();

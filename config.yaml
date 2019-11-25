@@ -42,6 +42,6 @@ programs:
           - name: comm
             type: char[16]
           - name: fname
-            type: char
+            type: char[255]
           - name: flags
             type: int32
