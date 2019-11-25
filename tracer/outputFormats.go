@@ -27,8 +27,8 @@ func readPerfChannel(ctx context.Context, outType reflect.Type,
 			fmt.Println("Done")
 			return
 		case inputBytes := <-dataChan:
-			sendBytesToSock(ctx, outType, inputBytes, errChan, verbose, mapName, c,
-				mux)
+			sendBytesToSock(ctx, outType, inputBytes, map[string]string{}, errChan,
+				verbose, mapName, c, mux)
 		}
 	}
 }
@@ -58,6 +58,9 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 				tableIter.Key(), table.ID(), tableIter.Err())
 			return
 		}
+		// Save key as a tag
+		keyAsString := binary.LittleEndian.Uint64(tableIter.Key())
+		tags := map[string]string{"hash_key": strconv.FormatUint(keyAsString, 10)}
 		// Write to buffer. Should also check that write size == reflect size
 		_, err = buf.Write(val)
 		if err != nil {
@@ -65,9 +68,10 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 				err)
 			return
 		}
+		fmt.Printf("Key is %v\n", tableIter.Key())
 		// Write data to struct and send it on
-		sendBytesToSock(ctx, outType, buf.Bytes(), errChan, verbose, table.ID(), c,
-			mux)
+		sendBytesToSock(ctx, outType, buf.Bytes(), tags, errChan, verbose,
+			table.ID(), c, mux)
 	}
 
 	return
@@ -77,8 +81,8 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 // Read in data, write to a new struct object of reflect type, format and send
 // to socket
 func sendBytesToSock(ctx context.Context, outType reflect.Type,
-	inBytes []byte, errChan chan error, verbose bool, mapName string,
-	c net.Conn, mux *sync.Mutex) {
+	inBytes []byte, tags map[string]string, errChan chan error, verbose bool,
+	mapName string, c net.Conn, mux *sync.Mutex) {
 
 	// Build out struct
 	outputStruct := reflect.New(outType).Elem()
@@ -92,7 +96,7 @@ func sendBytesToSock(ctx context.Context, outType reflect.Type,
 	}
 
 	// Get influx-like output
-	outputString := formatOutput(mapName, outputStruct)
+	outputString := formatOutput(mapName, outputStruct, tags)
 	// Get raw JSON output, does not convert byte arrays to strings
 	outputJson, _ := json.Marshal(outputStruct.Interface())
 
@@ -118,10 +122,19 @@ func sendOutputToSock(outString string, errChan chan error, mux *sync.Mutex,
 }
 
 // Loop over each struct, write output in Influx-like format. Convert arrays to
-// strings. Assumes all arrays are byte strings.
-func formatOutput(mapName string, outputStruct reflect.Value) string {
+// strings. Assumes all arrays are byte strings. Add tags
+func formatOutput(mapName string, outputStruct reflect.Value,
+	tags map[string]string) string {
+
+	// <measurement>|,<tag_key>=<tag_value>[n]| <field_key>=<field_value>[n] <timestamp>
 	var sb strings.Builder
+	// measurement
 	sb.WriteString(mapName)
+	// tags
+	for key, val := range tags {
+		sb.WriteString(fmt.Sprintf(",%s=%s", key, val))
+	}
+	// field value
 	sb.WriteString(" ")
 	// Loop over struct fields
 	for i := 0; i < outputStruct.NumField(); i++ {
