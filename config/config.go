@@ -11,6 +11,8 @@ import (
 type GreggdConfig struct {
 	// Socket we're writing data out to
 	SocketPath string `yaml:"socketPath"`
+	// Format for verbose output
+	VerboseFormat string `yaml:"verboseFormat"`
 	// Log measurements to stdout. Overwritten by command line value if set
 	Verbose bool `yaml:"verbose"`
 	// List of the eBPF programs managed by this app

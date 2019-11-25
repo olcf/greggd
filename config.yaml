@@ -3,9 +3,12 @@
 # Socket to open
 socketPath: /tmp/greggd.sock
 
+# Format for verbose output
+verboseFormat: influx
+
 # Hash of all programs to load
 programs:
-  - source: ./csrc/opensnoop.c
+  - source: /usr/share/greggd/c/opensnoop.c
     # Events to bind program to
     events:
       - type: kprobe
@@ -17,12 +20,12 @@ programs:
     # What should we read from
     outputs:
       - type: BPF_PERF_OUTPUT
-        id: events
+        id: opensnoop
         format:
           - name: id
             type: u64
-          - name: ts
-            type: u64
+          - name: pid
+            type: u32
           - name: uid
             type: u32
           - name: ret
