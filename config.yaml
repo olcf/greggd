@@ -1,14 +1,14 @@
 ---
-
-# Socket to open
-socketPath: /tmp/greggd.sock
-
-# Format for verbose output
-verboseFormat: influx
+# Variables to set for all program traces
+globals:
+  # Socket to open
+  socketPath: /tmp/greggd.sock
+  # Format for verbose output
+  verboseFormat: influx
 
 # Hash of all programs to load
 programs:
-  - source: /usr/share/greggd/c/opensnoop.c
+  - source: ./csrc/opensnoop.c
     # Events to bind program to
     events:
       - type: kprobe
@@ -26,15 +26,22 @@ programs:
             type: u64
           - name: pid
             type: u32
+            isTag: true
           - name: uid
             type: u32
+            isTag: true
           - name: ret
             type: int32
           - name: comm
             type: char[16]
           - name: fname
             type: char[255]
-          - name: flags
+            isTag: true
+            filter:
+              "or":
+                - "have-prefix": "/proc"
+                - "have-prefix": "/sys"
+          - name: flag
             type: int32
       - type: BPF_HASH
         id: infotmp
@@ -46,5 +53,6 @@ programs:
             type: char[16]
           - name: fname
             type: char[255]
+            isTag: true
           - name: flags
             type: int32

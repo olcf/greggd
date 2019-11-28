@@ -18,8 +18,8 @@ import (
 )
 
 func readPerfChannel(ctx context.Context, outType reflect.Type,
-	dataChan chan []byte, errChan chan error, verbose bool, verboseFormat string,
-	mapName string, c net.Conn, mux *sync.Mutex) {
+	dataChan chan []byte, errChan chan error, outputFormat []config.BPFOutputFormat,
+	globals config.GlobalOptions, mapName string, c net.Conn, mux *sync.Mutex) {
 
 	for {
 		select {
@@ -28,14 +28,14 @@ func readPerfChannel(ctx context.Context, outType reflect.Type,
 			return
 		case inputBytes := <-dataChan:
 			readBytesAndOutput(ctx, outType, inputBytes, map[string]string{}, errChan,
-				verbose, verboseFormat, mapName, c, mux)
+				outputFormat, globals, mapName, c, mux)
 		}
 	}
 }
 
 func iterateHashMap(ctx context.Context, table *bcc.Table,
-	outType reflect.Type, errChan chan error, verbose bool, verboseFormat string,
-	c net.Conn, mux *sync.Mutex) {
+	outType reflect.Type, errChan chan error, outputFormat []config.BPFOutputFormat,
+	globals config.GlobalOptions, c net.Conn, mux *sync.Mutex) {
 
 	// Get table iterator and iterate over keys
 	tableIter := table.Iter()
@@ -69,8 +69,8 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 			return
 		}
 		// Write data to struct and send it on
-		readBytesAndOutput(ctx, outType, buf.Bytes(), tags, errChan, verbose,
-			verboseFormat, table.ID(), c, mux)
+		readBytesAndOutput(ctx, outType, buf.Bytes(), tags, errChan, outputFormat, globals,
+			table.ID(), c, mux)
 	}
 
 	return
@@ -80,8 +80,8 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 // Read in data, write to a new struct object of reflect type, format and send
 // to socket
 func readBytesAndOutput(ctx context.Context, outType reflect.Type,
-	inBytes []byte, tags map[string]string, errChan chan error, verbose bool,
-	verboseFormat string, mapName string, c net.Conn, mux *sync.Mutex) {
+	inBytes []byte, tags map[string]string, errChan chan error, outputFormat []config.BPFOutputFormat,
+	globals config.GlobalOptions, mapName string, c net.Conn, mux *sync.Mutex) {
 
 	// Build out struct
 	outputStruct := reflect.New(outType).Elem()
@@ -95,14 +95,14 @@ func readBytesAndOutput(ctx context.Context, outType reflect.Type,
 	}
 
 	// Get influx-like output
-	outputString, err := formatOutput(mapName, outputStruct)
+	outputString, err := formatOutput(mapName, outputStruct, outputFormat)
 	if err != nil {
 		errChan <- fmt.Errorf("tracer.go: Error formatting output: %s\n", err)
 	}
 
 	sendOutputToSock(outputString, errChan, mux, c)
-	if verbose {
-		switch verboseFormat {
+	if globals.Verbose {
+		switch globals.VerboseFormat {
 		case "json":
 			// Get raw JSON output, does not convert byte arrays to strings
 			outputJson, _ := json.Marshal(outputStruct.Interface())
@@ -146,7 +146,7 @@ func escapeField(field string) string {
 
 func isTag(tag string) bool {
 	switch tag {
-	case "pid", "uid", "fname", "process":
+	case "key", "pid", "uid", "fname", "process":
 		return true
 	}
 	return false
@@ -171,7 +171,7 @@ func handleSpecialValue(field string, value interface{}) string {
 
 // Loop over each struct, write output in Influx-like format. Convert arrays to
 // strings. Assumes all arrays are byte strings.
-func formatOutput(mapName string, outputStruct reflect.Value) (string, error) {
+func formatOutput(mapName string, outputStruct reflect.Value, outputFormat []config.BPFOutputFormat) (string, error) {
 
 	tags := make(map[string]interface{})
 	fields := make(map[string]interface{})
@@ -179,36 +179,55 @@ func formatOutput(mapName string, outputStruct reflect.Value) (string, error) {
 	var sb strings.Builder
 
 	var err error
+	var value interface{}
 	for i := 0; i < outputStruct.NumField(); i++ {
 		// Get data type and value of the field
 		fieldKind := outputStruct.Type().Field(i)
 		fieldVal := outputStruct.Field(i)
 		fieldName := strings.ToLower(fieldKind.Name)
+		fieldFormat := outputFormat[i]
 
+		// If an array, assume byte array
 		if fieldKind.Type.Kind() == reflect.Array {
 
+			// Convert byte array to string
 			bytesVal := fieldVal.Slice(0, fieldVal.Len()).Bytes()
-
 			n := bytes.IndexByte(bytesVal, 0)
-			stringVal := string(bytesVal[:n])
+			value = string(bytesVal[:n])
 
-			if len(stringVal) == 0 || strings.HasPrefix(stringVal, "/proc/") {
-				fmt.Sprintf("  Returning early. StringVal: %s\n", stringVal)
+			// Filter strings
+			if len(value.(string)) == 0 {
+				fmt.Sprintf("  Returning early. StringVal: %s\n", value)
 				return "", err
 			}
+		} else {
+			value = fieldVal
+		}
 
-			if isTag(fieldName) {
-				tags[fieldName] = formatTag(stringVal)
+		// Filter values
+		value, err = filterValues(value, fieldFormat)
+		if err != nil {
+			return "", fmt.Errorf("tracer.go: Error filtering values: %s\n", err)
+		}
+		if value == nil {
+			return "", nil
+		}
+
+		_, valueIsString := value.(string)
+		if fieldFormat.IsTag {
+			if valueIsString {
+				tags[fieldName] = formatTag(value.(string))
 			} else {
-				fields[fieldName] = escapeField(stringVal)
+				tags[fieldName] = value
 			}
 		} else {
-			if isTag(fieldName) {
-				tags[fieldName] = fieldVal
+			if valueIsString {
+				fields[fieldName] = escapeField(value.(string))
 			} else {
-				fields[fieldName] = fieldVal
+				fields[fieldName] = value
 			}
 		}
+
 	}
 
 	sb.WriteString(mapName)
@@ -241,6 +260,27 @@ func formatOutput(mapName string, outputStruct reflect.Value) (string, error) {
 	sb.WriteString(fmt.Sprintf(" %d\n", time.Now().Unix()))
 
 	return sb.String(), nil
+}
+
+func filterValues(value interface{}, outFormat config.BPFOutputFormat) (interface{}, error) {
+	// No filter, return
+	if outFormat.CompiledFilter == nil {
+		return value, nil
+	}
+
+	// If filter, try match. If error throw
+	filterMatch, err := outFormat.CompiledFilter.Match(value)
+	if err != nil {
+		return nil, err
+	}
+
+	// If there's a match, return nothing
+	if filterMatch {
+		return nil, nil
+	}
+
+	// Value doesn't match filter. Return
+	return value, nil
 }
 
 // Use reflect package to build a new type for binary output unmarshalling at
