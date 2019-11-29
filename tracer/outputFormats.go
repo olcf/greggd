@@ -27,14 +27,6 @@ func escapeField(field string) string {
 	return sb.String()
 }
 
-func isTag(tag string) bool {
-	switch tag {
-	case "key", "pid", "uid", "fname", "process":
-		return true
-	}
-	return false
-}
-
 func formatTag(tag string) string {
 	var sb strings.Builder
 
@@ -52,18 +44,18 @@ func handleSpecialValue(field string, value interface{}) string {
 	return fmt.Sprintf("%v", value)
 }
 
-// Loop over each struct, write output in Influx-like format. Convert arrays to
-// strings. Assumes all arrays are byte strings.
+// Loop over each struct, formatting byte arrays to strings, filtering output,
+// marking as tag or measurement field. Return influx formatted measurement
 func formatOutput(mapName string, outputStruct reflect.Value,
 	outputFormat []config.BPFOutputFormat) (string, error) {
 
 	tags := make(map[string]interface{})
 	fields := make(map[string]interface{})
 
-	var sb strings.Builder
-
 	var err error
 	var value interface{}
+	// Iterate over values in struct. Format and filter data types and append to
+	// either tag or field maps
 	for i := 0; i < outputStruct.NumField(); i++ {
 		// Get data type and value of the field
 		fieldKind := outputStruct.Type().Field(i)
@@ -85,6 +77,7 @@ func formatOutput(mapName string, outputStruct reflect.Value,
 				return "", err
 			}
 		} else {
+			// Otherwise, value is value
 			value = fieldVal
 		}
 
@@ -114,7 +107,17 @@ func formatOutput(mapName string, outputStruct reflect.Value,
 
 	}
 
-	sb.WriteString(mapName)
+	// Format to influx
+	return influxFormat(mapName, tags, fields), err
+}
+
+// Print key name, tags, and fields to influx format with timestamp
+func influxFormat(keyName string, tags map[string]interface{},
+	fields map[string]interface{}) string {
+
+	var sb strings.Builder
+	// Create influx format string from key name, tags, and fields
+	sb.WriteString(keyName)
 
 	nt, nf := len(tags), len(fields)
 
@@ -143,7 +146,7 @@ func formatOutput(mapName string, outputStruct reflect.Value,
 
 	sb.WriteString(fmt.Sprintf(" %d\n", time.Now().Unix()))
 
-	return sb.String(), nil
+	return sb.String()
 }
 
 func filterValues(value interface{},
