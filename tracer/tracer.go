@@ -49,7 +49,8 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 		perfMap.Start()
 		// Set up listening on the output perf map channel. Needs to accept ctx
 		// cancel
-		readPerfChannel(ctx, outputType, dataChan, errChan, output.Format, globals, output.Id, c, mux)
+		readPerfChannel(ctx, outputType, dataChan, errChan, output.Format, globals,
+			output.Id, c, mux)
 		perfMap.Stop()
 	case "BPF_HASH":
 		sleepDuration, err := time.ParseDuration(output.Poll)
