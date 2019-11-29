@@ -2,13 +2,13 @@
 # Variables to set for all program traces
 globals:
   # Socket to open
-  socketPath: /tmp/greggd.sock
+  socketPath: /run/greggd.sock
   # Format for verbose output
   verboseFormat: influx
 
 # Hash of all programs to load
 programs:
-  - source: ./csrc/opensnoop.c
+  - source: /usr/share/greggd/c/opensnoop.c
     # Events to bind program to
     events:
       - type: kprobe
