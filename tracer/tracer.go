@@ -126,7 +126,7 @@ func attachAndLoadEvent(event config.BPFEvent, m *bcc.Module) error {
 }
 
 func Trace(ctx context.Context, program config.BPFProgram,
-	errChan chan error, globals config.GlobalOptions, mux *sync.Mutex,
+	errChan chan error, globals config.GlobalOptions, c net.Conn, mux *sync.Mutex,
 	wg *sync.WaitGroup) {
 	// Close waitgroup whenever we exit
 	defer wg.Done()
@@ -149,14 +149,6 @@ func Trace(ctx context.Context, program config.BPFProgram,
 			errChan <- err
 			return
 		}
-	}
-
-	// Open Socket
-	c, err := net.Dial("unix", globals.SocketPath)
-	if err != nil {
-		errChan <- fmt.Errorf("tracer.go: Error dialing socket %s: %s\n",
-			globals.SocketPath, err)
-		return
 	}
 
 	// Load and watch  output maps
