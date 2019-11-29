@@ -85,7 +85,8 @@ func ParseConfig(input io.Reader) (*GreggdConfig, error) {
 	}
 
 	// Compile filters into go mega filters. Need to edit the struct for each
-	// filter. Iterate down to filters, using pointers to each item
+	// filter. Iterate down to formats, using pointers to each item. Add compiled
+	// filter to format
 	for iProg := range configStruct.Programs {
 		prog := &configStruct.Programs[iProg]
 		for iOutput := range prog.Outputs {
@@ -98,7 +99,7 @@ func ParseConfig(input io.Reader) (*GreggdConfig, error) {
 				compiledFilter, err := compileGomegaMatcher(format.Filter)
 				if err != nil {
 					return nil, fmt.Errorf(
-						"config.go: Error compiling filter %s for %s: %s\n", format.Filter,
+						"config.go: Error compiling filter %v for %s: %s\n", format.Filter,
 						prog.Source, err)
 				}
 				format.CompiledFilter = compiledFilter
