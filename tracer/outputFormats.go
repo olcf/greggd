@@ -47,9 +47,9 @@ func handleSpecialValue(field string, value interface{}) string {
 // Loop over each struct, formatting byte arrays to strings, filtering output,
 // marking as tag or measurement field. Return influx formatted measurement
 func formatOutput(mapName string, outputStruct reflect.Value,
-	outputFormat []config.BPFOutputFormat) (string, error) {
+	tags map[string]interface{}, outputFormat []config.BPFOutputFormat) (string,
+	error) {
 
-	tags := make(map[string]interface{})
 	fields := make(map[string]interface{})
 
 	var err error
