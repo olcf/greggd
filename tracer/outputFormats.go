@@ -30,27 +30,17 @@ func escapeField(field string) string {
 func formatTag(tag string) string {
 	var sb strings.Builder
 
-	sb.WriteString("\"")
 	sb.WriteString(tag)
-	sb.WriteString("\"")
 	return sb.String()
-}
-
-func handleSpecialValue(field string, value interface{}) string {
-	switch field {
-	case "flags":
-		return fmt.Sprintf("%#o", value)
-	}
-	return fmt.Sprintf("%v", value)
 }
 
 // Loop over each struct, formatting byte arrays to strings, filtering output,
 // marking as tag or measurement field. Return influx formatted measurement
 func formatOutput(mapName string, outputStruct reflect.Value,
-	tags map[string]interface{}, outputFormat []config.BPFOutputFormat) (string,
+	tags map[string]string, outputFormat []config.BPFOutputFormat) (string,
 	error) {
 
-	fields := make(map[string]interface{})
+	fields := make(map[string]string)
 
 	var err error
 	var value interface{}
@@ -71,13 +61,16 @@ func formatOutput(mapName string, outputStruct reflect.Value,
 			n := bytes.IndexByte(bytesVal, 0)
 			value = string(bytesVal[:n])
 
-			// Filter strings
+			// Filter strings on length
 			if len(value.(string)) == 0 {
 				fmt.Sprintf("  Returning early. StringVal: %s\n", value)
 				return "", err
 			}
+
+			// Add escaped quotes to strings
+			value = escapeField(value.(string))
 		} else {
-			// Otherwise, value is value
+			// Otherwise, save value as a value
 			value = fieldVal
 		}
 
@@ -90,19 +83,17 @@ func formatOutput(mapName string, outputStruct reflect.Value,
 			return "", nil
 		}
 
-		_, valueIsString := value.(string)
+		// Format value as string
+		if fieldFormat.FormatString == "" {
+			fieldFormat.FormatString = "%v"
+		}
+		stringValue := fmt.Sprintf(fieldFormat.FormatString, value)
+
+		// Add to appropriate map for tag or data field
 		if fieldFormat.IsTag {
-			if valueIsString {
-				tags[fieldName] = formatTag(value.(string))
-			} else {
-				tags[fieldName] = value
-			}
+			tags[fieldName] = formatTag(stringValue)
 		} else {
-			if valueIsString {
-				fields[fieldName] = escapeField(value.(string))
-			} else {
-				fields[fieldName] = value
-			}
+			fields[fieldName] = stringValue
 		}
 
 	}
@@ -112,8 +103,8 @@ func formatOutput(mapName string, outputStruct reflect.Value,
 }
 
 // Print key name, tags, and fields to influx format with timestamp
-func influxFormat(keyName string, tags map[string]interface{},
-	fields map[string]interface{}) string {
+func influxFormat(keyName string, tags map[string]string,
+	fields map[string]string) string {
 
 	var sb strings.Builder
 	// Create influx format string from key name, tags, and fields
@@ -141,7 +132,7 @@ func influxFormat(keyName string, tags map[string]interface{},
 		}
 		sb.WriteString(formatValueField(k))
 		sb.WriteString("=")
-		sb.WriteString(handleSpecialValue(k, v))
+		sb.WriteString(v)
 	}
 
 	sb.WriteString(fmt.Sprintf(" %d\n", time.Now().Unix()))

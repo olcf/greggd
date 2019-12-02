@@ -26,7 +26,7 @@ func readPerfChannel(ctx context.Context, outType reflect.Type,
 			fmt.Println("Done")
 			return
 		case inputBytes := <-dataChan:
-			readBytesAndOutput(ctx, outType, inputBytes, map[string]interface{}{},
+			readBytesAndOutput(ctx, outType, inputBytes, map[string]string{},
 				errChan, outputFormat, globals, mapName, c, mux)
 		}
 	}
@@ -59,7 +59,8 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 		}
 		// Save key as a tag
 		keyAsString := binary.LittleEndian.Uint64(tableIter.Key())
-		tags := map[string]interface{}{"hash_key": strconv.FormatUint(keyAsString, 10)}
+		tags := map[string]string{"hash_key": fmt.Sprintf("%d",
+			strconv.FormatUint(keyAsString, 10))}
 		// Write to buffer. Should also check that write size == reflect size
 		_, err = buf.Write(val)
 		if err != nil {
@@ -79,7 +80,7 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 // Read in data, write to a new struct object of reflect type, format and send
 // to socket
 func readBytesAndOutput(ctx context.Context, outType reflect.Type,
-	inBytes []byte, tags map[string]interface{}, errChan chan error,
+	inBytes []byte, tags map[string]string, errChan chan error,
 	outputFormat []config.BPFOutputFormat, globals config.GlobalOptions,
 	mapName string, c net.Conn, mux *sync.Mutex) {
 

@@ -43,6 +43,7 @@ programs:
                 - "have-prefix": "/sys"
           - name: flag
             type: int32
+            formatString: "%#o"
       - type: BPF_HASH
         id: infotmp
         poll: 1s
@@ -54,5 +55,6 @@ programs:
           - name: fname
             type: char[255]
             isTag: true
-          - name: flags
+          - name: flag
             type: int32
+            formatString: "%#o"

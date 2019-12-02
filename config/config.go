@@ -61,6 +61,8 @@ type BPFOutputFormat struct {
 	Name string `yaml:"name"`
 	// Type of the value
 	Type string `yaml:"type"`
+	// Golang format string to save value as. Defaults to %v
+	FormatString string `yaml:"formatString"`
 	// Set if this should be a tag
 	IsTag bool `yaml:"isTag"`
 	// Filter to apply to values
@@ -93,6 +95,7 @@ func ParseConfig(input io.Reader) (*GreggdConfig, error) {
 			output := &prog.Outputs[iOutput]
 			for iFormat := range output.Format {
 				format := &output.Format[iFormat]
+				// If there's no format filter, skip
 				if format.Filter == nil {
 					continue
 				}
