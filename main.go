@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"sync"
@@ -58,8 +59,8 @@ Greggd collects and exports low-level tracing data from the eBPF in-kernel virtu
 	configStruct := parseConfig()
 
 	// If cli says verbose and config doesn't, set config to verbose
-	if *verbose && !configStruct.Verbose {
-		configStruct.Verbose = true
+	if *verbose && !configStruct.Globals.Verbose {
+		configStruct.Globals.Verbose = true
 	}
 
 	// Create background context with cancel function
@@ -76,6 +77,15 @@ Greggd collects and exports low-level tracing data from the eBPF in-kernel virtu
 	errChan := make(chan error)
 	defer close(errChan)
 
+	// Open Socket
+	c, err := net.Dial("unix", configStruct.Globals.SocketPath)
+	if err != nil {
+		fmt.Fprintf(flag.CommandLine.Output(),
+			"main.go: Error dialing socket %s: %s\n",
+			configStruct.Globals.SocketPath, err)
+		return
+	}
+
 	// Create wait group to watch goroutine progress
 	var wg sync.WaitGroup
 	var mux sync.Mutex
@@ -84,7 +94,7 @@ Greggd collects and exports low-level tracing data from the eBPF in-kernel virtu
 	// the work
 	for _, program := range configStruct.Programs {
 		wg.Add(1)
-		go tracer.Trace(ctx, program, errChan, configStruct, &mux, &wg)
+		go tracer.Trace(ctx, program, errChan, configStruct.Globals, c, &mux, &wg)
 	}
 
 	// Watch for sig-term or errors

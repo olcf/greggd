@@ -1,10 +1,10 @@
 ---
-
-# Socket to open
-socketPath: /run/greggd.sock
-
-# Format for verbose output
-verboseFormat: influx
+# Variables to set for all program traces
+globals:
+  # Socket to open
+  socketPath: /run/greggd.sock
+  # Format for verbose output
+  verboseFormat: influx
 
 # Hash of all programs to load
 programs:
@@ -26,25 +26,21 @@ programs:
             type: u64
           - name: pid
             type: u32
+            isTag: true
           - name: uid
             type: u32
+            isTag: true
           - name: ret
             type: int32
           - name: comm
             type: char[16]
           - name: fname
             type: char[255]
-          - name: flags
+            isTag: true
+            filter:
+              "or":
+                - "have-prefix": "\"/proc"
+                - "have-prefix": "\"/sys"
+          - name: flag
             type: int32
-            #      - type: BPF_HASH
-            #        id: hash
-            #        poll: 1s
-            #        format:
-            #          - name: id
-            #            type: u64
-            #          - name: comm
-            #            type: char[]
-            #          - name: fname
-            #            type: char[]
-            #          - name: flags
-            #            type: int
+            formatString: "%#o"

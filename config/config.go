@@ -5,18 +5,24 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/onsi/gomega/types"
 	"gopkg.in/yaml.v2"
 )
 
 type GreggdConfig struct {
+	// Store global options for development
+	Globals GlobalOptions
+	// List of the eBPF programs managed by this app
+	Programs []BPFProgram
+}
+
+type GlobalOptions struct {
 	// Socket we're writing data out to
 	SocketPath string `yaml:"socketPath"`
-	// Format for verbose output
+	// Format for verbose output.
 	VerboseFormat string `yaml:"verboseFormat"`
 	// Log measurements to stdout. Overwritten by command line value if set
 	Verbose bool `yaml:"verbose"`
-	// List of the eBPF programs managed by this app
-	Programs []BPFProgram
 }
 
 type BPFProgram struct {
@@ -55,13 +61,21 @@ type BPFOutputFormat struct {
 	Name string `yaml:"name"`
 	// Type of the value
 	Type string `yaml:"type"`
+	// Golang format string to save value as. Defaults to %v
+	FormatString string `yaml:"formatString"`
+	// Set if this should be a tag
+	IsTag bool `yaml:"isTag"`
+	// Filter to apply to values
+	Filter interface{} `yaml:"filter"`
+	// Filters get compiled by <func> and iterated over to check
+	CompiledFilter types.GomegaMatcher
 }
 
 func ParseConfig(input io.Reader) (*GreggdConfig, error) {
 	buf := bytes.NewBuffer([]byte{})
 	_, err := buf.ReadFrom(input)
 	if err != nil {
-		return nil, fmt.Errorf("\nconfig.go: Error reading input to buffer:\n%s",
+		return nil, fmt.Errorf("config.go: Error reading input to buffer:\n%s",
 			err)
 	}
 
@@ -69,7 +83,31 @@ func ParseConfig(input io.Reader) (*GreggdConfig, error) {
 	err = yaml.Unmarshal(buf.Bytes(), &configStruct)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"\nconfig.go: Error unmarshalling config into struct:\n%s", err)
+			"config.go: Error unmarshalling config into struct:\n%s", err)
+	}
+
+	// Compile filters into go mega filters. Need to edit the struct for each
+	// filter. Iterate down to formats, using pointers to each item. Add compiled
+	// filter to format
+	for iProg := range configStruct.Programs {
+		prog := &configStruct.Programs[iProg]
+		for iOutput := range prog.Outputs {
+			output := &prog.Outputs[iOutput]
+			for iFormat := range output.Format {
+				format := &output.Format[iFormat]
+				// If there's no format filter, skip
+				if format.Filter == nil {
+					continue
+				}
+				compiledFilter, err := compileGomegaMatcher(format.Filter)
+				if err != nil {
+					return nil, fmt.Errorf(
+						"config.go: Error compiling filter %v for %s: %s\n", format.Filter,
+						prog.Source, err)
+				}
+				format.CompiledFilter = compiledFilter
+			}
+		}
 	}
 
 	return &configStruct, nil

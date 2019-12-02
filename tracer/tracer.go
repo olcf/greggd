@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/olcf/greggd/config"
 	bcc "github.com/josephvoss/gobpf/bcc"
@@ -15,8 +16,8 @@ import (
 // Watch each configured memory map. Read perf events as they are sent.
 // Otherwise output contents of memory maps as a poll
 func pollOutputMaps(ctx context.Context, output config.BPFOutput,
-	m *bcc.Module, errChan chan error, verbose bool, verboseFormat string, c net.Conn, mux *sync.Mutex,
-	wg *sync.WaitGroup) {
+	m *bcc.Module, errChan chan error, globals config.GlobalOptions,
+	c net.Conn, mux *sync.Mutex, wg *sync.WaitGroup) {
 
 	defer wg.Done()
 
@@ -48,10 +49,21 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 		perfMap.Start()
 		// Set up listening on the output perf map channel. Needs to accept ctx
 		// cancel
-		readPerfChannel(ctx, outputType, dataChan, errChan, verbose, verboseFormat, output.Id, c, mux)
+		readPerfChannel(ctx, outputType, dataChan, errChan, output.Format, globals,
+			output.Id, c, mux)
 		perfMap.Stop()
 	case "BPF_HASH":
-	case "BPF_HISTOGRAM":
+		sleepDuration, err := time.ParseDuration(output.Poll)
+		if err != nil {
+			errChan <- fmt.Errorf("tracer.go: Error parsing poll time %s: %s\n",
+				output.Poll, err)
+			return
+		}
+		for {
+			iterateHashMap(ctx, table, outputType, errChan, output.Format, globals,
+				c, mux)
+			time.Sleep(sleepDuration)
+		}
 	default:
 		errChan <- fmt.Errorf("tracer.go: Output type %s is not supported",
 			output.Type)
@@ -113,7 +125,7 @@ func attachAndLoadEvent(event config.BPFEvent, m *bcc.Module) error {
 }
 
 func Trace(ctx context.Context, program config.BPFProgram,
-	errChan chan error, configStruct *config.GreggdConfig, mux *sync.Mutex,
+	errChan chan error, globals config.GlobalOptions, c net.Conn, mux *sync.Mutex,
 	wg *sync.WaitGroup) {
 	// Close waitgroup whenever we exit
 	defer wg.Done()
@@ -138,18 +150,10 @@ func Trace(ctx context.Context, program config.BPFProgram,
 		}
 	}
 
-	// Open Socket
-	c, err := net.Dial("unix", configStruct.SocketPath)
-	if err != nil {
-		errChan <- fmt.Errorf("tracer.go: Error dialing socket %s: %s\n",
-			configStruct.SocketPath, err)
-		return
-	}
-
 	// Load and watch  output maps
 	for _, output := range program.Outputs {
 		wg.Add(1)
-		go pollOutputMaps(ctx, output, m, errChan, configStruct.Verbose, configStruct.VerboseFormat, c, mux, wg)
+		go pollOutputMaps(ctx, output, m, errChan, globals, c, mux, wg)
 	}
 	wg.Wait()
 }

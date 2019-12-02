@@ -14,7 +14,7 @@
 struct val_t {
     u64 id;
     char comm[TASK_COMM_LEN];
-    const char *fname;
+    const char * fname;
     int flags; // EXTENDED_STRUCT_MEMBER
 };
 
@@ -63,8 +63,8 @@ int trace_return(struct pt_regs *ctx)
         // missed entry
         return 0;
     }
-    bpf_probe_read(&data.comm, sizeof(data.comm), valp->comm);
-    bpf_probe_read(&data.fname, sizeof(data.fname), (void *)valp->fname);
+    bpf_probe_read_str(&data.comm, sizeof(valp->comm), valp->comm);
+    bpf_probe_read_str(&data.fname, NAME_MAX, valp->fname);
     data.id = valp->id;
     data.pid = data.id >> 32; // Take higher part
     //data.ts = tsp;
