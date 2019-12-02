@@ -44,17 +44,3 @@ programs:
           - name: flag
             type: int32
             formatString: "%#o"
-      - type: BPF_HASH
-        id: infotmp
-        poll: 1s
-        format:
-          - name: id
-            type: u64
-          - name: comm
-            type: char[16]
-          - name: fname
-            type: char[255]
-            isTag: true
-          - name: flag
-            type: int32
-            formatString: "%#o"
