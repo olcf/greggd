@@ -39,8 +39,8 @@ programs:
             isTag: true
             filter:
               "or":
-                - "have-prefix": "/proc"
-                - "have-prefix": "/sys"
+                - "have-prefix": "\"/proc"
+                - "have-prefix": "\"/sys"
           - name: flag
             type: int32
             formatString: "%#o"
