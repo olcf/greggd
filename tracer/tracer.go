@@ -64,7 +64,6 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 				c, mux)
 			time.Sleep(sleepDuration)
 		}
-	case "BPF_HISTOGRAM":
 	default:
 		errChan <- fmt.Errorf("tracer.go: Output type %s is not supported",
 			output.Type)
