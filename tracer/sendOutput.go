@@ -99,9 +99,15 @@ func readBytesAndOutput(ctx context.Context, outType reflect.Type,
 	outputString, err := formatOutput(mapName, outputStruct, tags, outputFormat)
 	if err != nil {
 		errChan <- fmt.Errorf("tracer.go: Error formatting output: %s\n", err)
+		return
 	}
 
-	sendOutputToSock(outputString, errChan, mux, c)
+	err = sendOutputToSock(outputString, mux, c)
+	if err != nil {
+		errChan <- fmt.Errorf("tracer.go: Error sending output to socket: %s\n",
+			err)
+		return
+	}
 	if globals.Verbose {
 		switch globals.VerboseFormat {
 		case "json":
@@ -115,16 +121,21 @@ func readBytesAndOutput(ctx context.Context, outType reflect.Type,
 
 }
 
-func sendOutputToSock(outString string, errChan chan error, mux *sync.Mutex,
+func sendOutputToSock(outString string, mux *sync.Mutex,
 	c net.Conn) error {
+
+	// Drop empty strings
+	if outString == "" {
+		return nil
+	}
 
 	mux.Lock()
 	defer mux.Unlock()
 
 	_, err := c.Write([]byte(outString))
 	if err != nil {
-		errChan <- fmt.Errorf("tracer.go: Error sending output to socket: %s\n",
-			err)
+		return err
 	}
+
 	return nil
 }
