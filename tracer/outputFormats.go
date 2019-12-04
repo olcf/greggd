@@ -135,7 +135,7 @@ func influxFormat(keyName string, tags map[string]string,
 		sb.WriteString(v)
 	}
 
-	sb.WriteString(fmt.Sprintf(" %d\n", time.Now().Unix()))
+	sb.WriteString(fmt.Sprintf(" %d\n", time.Now().UnixNano()))
 
 	return sb.String()
 }
