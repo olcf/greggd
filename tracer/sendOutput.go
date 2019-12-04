@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"strconv"
 	"sync"
 
 	"github.com/olcf/greggd/config"
@@ -58,9 +57,8 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 			return
 		}
 		// Save key as a tag
-		keyAsString := binary.LittleEndian.Uint64(tableIter.Key())
 		tags := map[string]string{"hash_key": fmt.Sprintf("%d",
-			strconv.FormatUint(keyAsString, 10))}
+			binary.LittleEndian.Uint64(tableIter.Key()))}
 		// Write to buffer. Should also check that write size == reflect size
 		_, err = buf.Write(val)
 		if err != nil {
