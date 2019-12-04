@@ -14,13 +14,14 @@
 struct val_t {
     u64 id;
     char comm[TASK_COMM_LEN];
-    const char *fname;
+    const char * fname;
     int flags; // EXTENDED_STRUCT_MEMBER
 };
 
 struct data_t {
     u64 id;
-    u64 ts;
+    // u64 ts; // not currently trustworthy
+    u32 pid;
     u32 uid;
     int ret;
     char comm[TASK_COMM_LEN];
@@ -29,14 +30,14 @@ struct data_t {
 };
 
 BPF_HASH(infotmp, u64, struct val_t);
-BPF_PERF_OUTPUT(events);
+BPF_PERF_OUTPUT(opensnoop);
 
 int trace_entry(struct pt_regs *ctx, int dfd, const char __user *filename, int flags)
 {
     struct val_t val = {};
     u64 id = bpf_get_current_pid_tgid();
-    u32 pid = id >> 32; // PID is higher part
-    u32 tid = id;       // Cast and get the lower part
+    //u32 pid = id >> 32; // PID is higher part
+    //u32 tid = id;       // Cast and get the lower part
     u32 uid = bpf_get_current_uid_gid();
 
     if (bpf_get_current_comm(&val.comm, sizeof(val.comm)) == 0) {
@@ -55,22 +56,23 @@ int trace_return(struct pt_regs *ctx)
     struct val_t *valp;
     struct data_t data = {};
 
-    u64 tsp = bpf_ktime_get_ns();
+    //u64 tsp = bpf_ktime_get_ns();
 
     valp = infotmp.lookup(&id);
     if (valp == 0) {
         // missed entry
         return 0;
     }
-    bpf_probe_read(&data.comm, sizeof(data.comm), valp->comm);
-    bpf_probe_read(&data.fname, sizeof(data.fname), (void *)valp->fname);
+    bpf_probe_read_str(&data.comm, sizeof(valp->comm), valp->comm);
+    bpf_probe_read_str(&data.fname, NAME_MAX, valp->fname);
     data.id = valp->id;
-    data.ts = tsp / 1000;
+    data.pid = data.id >> 32; // Take higher part
+    //data.ts = tsp;
     data.uid = bpf_get_current_uid_gid();
     data.flags = valp->flags; // EXTENDED_STRUCT_MEMBER
     data.ret = PT_REGS_RC(ctx);
 
-    events.perf_submit(ctx, &data, sizeof(data));
+    opensnoop.perf_submit(ctx, &data, sizeof(data));
     infotmp.delete(&id);
 
     return 0;
