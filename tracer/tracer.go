@@ -60,7 +60,7 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 			return
 		}
 		for {
-			iterateHashMap(ctx, table, outputType, errChan, output.Format, globals,
+			iterateHashMap(ctx, table, outputType, errChan, output, globals,
 				c, mux)
 			time.Sleep(sleepDuration)
 		}

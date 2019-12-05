@@ -52,6 +52,8 @@ type BPFOutput struct {
 	Type string `yaml:"type"`
 	// If not perf output, how often to poll output
 	Poll string `yaml:"poll"`
+	// Should we clear hash on poll
+	Clear bool `yaml:"clear"`
 	// Format of the struct
 	Format []BPFOutputFormat `yaml:"format"`
 }

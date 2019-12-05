@@ -33,7 +33,7 @@ func readPerfChannel(ctx context.Context, outType reflect.Type,
 }
 
 func iterateHashMap(ctx context.Context, table *bcc.Table,
-	outType reflect.Type, errChan chan error, outputFormat []config.BPFOutputFormat,
+	outType reflect.Type, errChan chan error, output config.BPFOutput,
 	globals config.GlobalOptions, c net.Conn, mux *sync.Mutex) {
 
 	// Get table iterator and iterate over keys
@@ -69,14 +69,17 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 		}
 		// Write data to struct and send it on
 		readBytesAndOutput(ctx, outType, buf.Bytes(), map[string]string{}, fields,
-			errChan, outputFormat, globals, table.ID(), c, mux)
+			errChan, output.Format, globals, table.ID(), c, mux)
+
 		// Clear the key
-		clearBytes := make([]byte, len(val))
-		err = table.Set(tableIter.Key(), clearBytes)
-		if err != nil {
-			errChan <- fmt.Errorf("tracer.go: Error clearing key %s from table: %s\n",
-				tableIter.Key(), table.ID(), err)
-			return
+		if output.Clear {
+			clearBytes := make([]byte, len(val))
+			err = table.Set(tableIter.Key(), clearBytes)
+			if err != nil {
+				errChan <- fmt.Errorf("tracer.go: Error clearing key %s from table: %s\n",
+					tableIter.Key(), table.ID(), err)
+				return
+			}
 		}
 	}
 
