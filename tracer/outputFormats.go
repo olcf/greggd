@@ -198,6 +198,8 @@ func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type,
 			itemType = uint64(0)
 		case "u32":
 			itemType = uint32(0)
+		case "u16":
+			itemType = uint16(0)
 		case "int":
 			itemType = int(0)
 		case "int32":
