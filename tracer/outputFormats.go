@@ -2,7 +2,9 @@ package tracer
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"net"
 	"reflect"
 	"strconv"
 	"strings"
@@ -63,12 +65,15 @@ func formatOutput(mapName string, outputStruct reflect.Value,
 
 			// Filter strings on length
 			if len(value.(string)) == 0 {
-				fmt.Sprintf("  Returning early. StringVal: %s\n", value)
 				return "", err
 			}
 
 			// Add escaped quotes to strings
 			value = escapeField(value.(string))
+		} else if fieldFormat.IsIP {
+			ip := make(net.IP, 4)
+			binary.LittleEndian.PutUint32(ip, fieldVal.Interface().(uint32))
+			value = ip
 		} else {
 			// Otherwise, save value as a value
 			value = fieldVal
@@ -90,7 +95,7 @@ func formatOutput(mapName string, outputStruct reflect.Value,
 		stringValue := fmt.Sprintf(fieldFormat.FormatString, value)
 
 		// Add to appropriate map for tag or data field
-		if fieldFormat.IsTag {
+		if fieldFormat.IsTag || fieldFormat.IsIP {
 			tags[fieldName] = formatTag(stringValue)
 		} else {
 			fields[fieldName] = stringValue
