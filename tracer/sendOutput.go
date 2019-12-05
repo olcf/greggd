@@ -45,21 +45,33 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 
 		// Iterate. Break if no more keys
 		if !tableIter.Next() {
-			// Should we send this error on, or just break and move on?
-			//errChan <- fmt.Errorf("tracer.go: Error iterating table %s: %s\n",
-			//	table.ID(), tableIter.Err())
-			//return
 			break
 		}
+
+		// Read value
 		val, err := table.Get(tableIter.Key())
 		if err != nil {
 			errChan <- fmt.Errorf("tracer.go: Error getting key %s from table: %s\n",
 				tableIter.Key(), table.ID(), tableIter.Err())
 			return
 		}
+
+		// Clear the value if desired
+		if output.Clear {
+			clearBytes := make([]byte, len(val))
+			err = table.Set(tableIter.Key(), clearBytes)
+			if err != nil {
+				errChan <- fmt.Errorf(
+					"tracer.go: Error clearing key %s from table: %s\n", tableIter.Key(),
+					table.ID(), err)
+				return
+			}
+		}
+
 		// Save key as a field
 		fields := map[string]string{"hash_key": fmt.Sprintf("%d",
 			binary.LittleEndian.Uint64(tableIter.Key()))}
+
 		// Write to buffer. Should also check that write size == reflect size
 		_, err = buf.Write(val)
 		if err != nil {
@@ -67,20 +79,10 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 				err)
 			return
 		}
+
 		// Write data to struct and send it on
 		readBytesAndOutput(ctx, outType, buf.Bytes(), map[string]string{}, fields,
 			errChan, output.Format, globals, table.ID(), c, mux)
-
-		// Clear the key
-		if output.Clear {
-			clearBytes := make([]byte, len(val))
-			err = table.Set(tableIter.Key(), clearBytes)
-			if err != nil {
-				errChan <- fmt.Errorf("tracer.go: Error clearing key %s from table: %s\n",
-					tableIter.Key(), table.ID(), err)
-				return
-			}
-		}
 	}
 
 	return
