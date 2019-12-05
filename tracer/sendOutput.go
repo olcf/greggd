@@ -25,8 +25,9 @@ func readPerfChannel(ctx context.Context, outType reflect.Type,
 			fmt.Println("Done")
 			return
 		case inputBytes := <-dataChan:
-			readBytesAndOutput(ctx, outType, inputBytes, map[string]string{},
-				errChan, outputFormat, globals, mapName, c, mux)
+			tags, fields := make(map[string]string), make(map[string]string)
+			readBytesAndOutput(ctx, outType, inputBytes, tags, fields, errChan,
+				outputFormat, globals, mapName, c, mux)
 		}
 	}
 }
@@ -56,8 +57,8 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 				tableIter.Key(), table.ID(), tableIter.Err())
 			return
 		}
-		// Save key as a tag
-		tags := map[string]string{"hash_key": fmt.Sprintf("%d",
+		// Save key as a field
+		fields := map[string]string{"hash_key": fmt.Sprintf("%d",
 			binary.LittleEndian.Uint64(tableIter.Key()))}
 		// Write to buffer. Should also check that write size == reflect size
 		_, err = buf.Write(val)
@@ -67,8 +68,16 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 			return
 		}
 		// Write data to struct and send it on
-		readBytesAndOutput(ctx, outType, buf.Bytes(), tags, errChan, outputFormat,
-			globals, table.ID(), c, mux)
+		readBytesAndOutput(ctx, outType, buf.Bytes(), map[string]string{}, fields,
+			errChan, outputFormat, globals, table.ID(), c, mux)
+		// Clear the key
+		clearBytes := make([]byte, len(val))
+		err = table.Set(tableIter.Key(), clearBytes)
+		if err != nil {
+			errChan <- fmt.Errorf("tracer.go: Error clearing key %s from table: %s\n",
+				tableIter.Key(), table.ID(), err)
+			return
+		}
 	}
 
 	return
@@ -78,9 +87,9 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 // Read in data, write to a new struct object of reflect type, format and send
 // to socket
 func readBytesAndOutput(ctx context.Context, outType reflect.Type,
-	inBytes []byte, tags map[string]string, errChan chan error,
-	outputFormat []config.BPFOutputFormat, globals config.GlobalOptions,
-	mapName string, c net.Conn, mux *sync.Mutex) {
+	inBytes []byte, tags map[string]string, fields map[string]string,
+	errChan chan error, outputFormat []config.BPFOutputFormat,
+	globals config.GlobalOptions, mapName string, c net.Conn, mux *sync.Mutex) {
 
 	// Build out struct
 	outputStruct := reflect.New(outType).Elem()
@@ -94,7 +103,8 @@ func readBytesAndOutput(ctx context.Context, outType reflect.Type,
 	}
 
 	// Get influx-like output
-	outputString, err := formatOutput(mapName, outputStruct, tags, outputFormat)
+	outputString, err := formatOutput(mapName, outputStruct, tags, fields,
+		outputFormat)
 	if err != nil {
 		errChan <- fmt.Errorf("tracer.go: Error formatting output: %s\n", err)
 		return

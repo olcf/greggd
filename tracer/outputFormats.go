@@ -37,10 +37,8 @@ func formatTag(tag string) string {
 // Loop over each struct, formatting byte arrays to strings, filtering output,
 // marking as tag or measurement field. Return influx formatted measurement
 func formatOutput(mapName string, outputStruct reflect.Value,
-	tags map[string]string, outputFormat []config.BPFOutputFormat) (string,
-	error) {
-
-	fields := make(map[string]string)
+	tags map[string]string, fields map[string]string,
+	outputFormat []config.BPFOutputFormat) (string, error) {
 
 	var err error
 	var value interface{}
