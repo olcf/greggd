@@ -98,7 +98,6 @@ func loopHashMap(ctx context.Context, table *bcc.Table,
 			binary.LittleEndian.Uint64(tableIter.Key()))}
 
 		// Write data to struct and send it on
-		fmt.Println("Writing to socket")
 		socketChan <- config.SocketInput{
 			MeasurementName: table.ID(), Fields: fields, Tags: map[string]string{},
 			Bytes: val, Output: output, Type: outType,

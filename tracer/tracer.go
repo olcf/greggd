@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/olcf/greggd/communication"
 	"github.com/olcf/greggd/config"
@@ -41,6 +40,8 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 	switch uppercaseType {
 	case "BPF_PERF_OUTPUT":
 		inputChan := make(chan []byte)
+		defer close(inputChan)
+
 		perfMap, err := bcc.InitPerfMap(table, inputChan)
 		if err != nil {
 			errChan <- fmt.Errorf("tracer.go: Error building perf map: %s\n", err)
@@ -53,17 +54,8 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 			&output, globals, output.Id)
 		perfMap.Stop()
 	case "BPF_HASH":
-		sleepDuration, err := time.ParseDuration(output.Poll)
-		if err != nil {
-			errChan <- fmt.Errorf("tracer.go: Error parsing poll time %s: %s\n",
-				output.Poll, err)
-			return
-		}
-		for {
-			iterateHashMap(ctx, table, outputType, dataChan, errChan, &output,
-				globals)
-			time.Sleep(sleepDuration)
-		}
+		iterateHashMap(ctx, table, outputType, dataChan, errChan, &output,
+			globals)
 	default:
 		errChan <- fmt.Errorf("tracer.go: Output type %s is not supported",
 			output.Type)
@@ -155,4 +147,5 @@ func Trace(ctx context.Context, program config.BPFProgram,
 		wg.Add(1)
 		go pollOutputMaps(ctx, output, m, dataChan, errChan, globals, wg)
 	}
+	wg.Wait()
 }
