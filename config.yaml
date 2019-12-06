@@ -44,3 +44,42 @@ programs:
           - name: flag
             type: int32
             formatString: "%#o"
+  - source: /usr/share/greggd/c/tcplife.c
+    # Events to bind program to
+    events:
+      - type: kprobe
+        loadFunc: kprobe__tcp_set_state
+        attachTo: tcp_set_state
+    # ipv6 is left as an exercise to the reader
+    # What should we read from
+    outputs:
+      - type: BPF_PERF_OUTPUT
+        id: ipv4_events
+        format:
+          - name: pid
+            type: u32
+            isTag: true
+          - name: laddr
+            type: u32
+            isIP: true
+          - name: raddr
+            type: u32
+            isIP: true
+          - name: lport
+            type: u16
+            isTag: true
+          - name: rport
+            type: u16
+            isTag: true
+          - name: rx_b
+            type: u64
+          - name: tx_b
+            type: u64
+          - name: span_us
+            type: u64
+          - name: comm
+            type: char[16]
+            isTag: true
+          - name: uid
+            type: u32
+            isTag: true

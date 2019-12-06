@@ -17,11 +17,12 @@ BPF_HASH(birth, struct sock *, u64);
 
 // separate data structs for ipv4 and ipv6
 struct ipv4_data_t {
-    u64 ts_us;
     u32 pid;
     u32 saddr;
     u32 daddr;
-    u64 ports;
+    //u64 ports;
+    u16 lport;
+    u16 rport;
     u64 rx_b;
     u64 tx_b;
     u64 span_us;
@@ -31,7 +32,6 @@ struct ipv4_data_t {
 BPF_PERF_OUTPUT(ipv4_events);
 
 struct ipv6_data_t {
-    u64 ts_us;
     u32 pid;
     unsigned __int128 saddr;
     unsigned __int128 daddr;
@@ -57,12 +57,11 @@ int kprobe__tcp_set_state(struct pt_regs *ctx, struct sock *sk, int state)
 
     // lport is either used in a filter here, or later
     u16 lport = sk->__sk_common.skc_num;
-    //FILTER_LPORT
 
-    // dport is either used in a filter here, or later
+    // destination port, switched to host byte order
+    //dport = (dport >> 8) | ((dport << 8) & 0x00FF00);
     u16 dport = sk->__sk_common.skc_dport;
     dport = ntohs(dport);
-    //FILTER_DPORT
 
     /*
      * This tool includes PID and comm context. It's best effort, and may
@@ -132,13 +131,13 @@ int kprobe__tcp_set_state(struct pt_regs *ctx, struct sock *sk, int state)
         data4.span_us = delta_us;
         data4.rx_b = rx_b;
         data4.tx_b = tx_b;
-        data4.ts_us = bpf_ktime_get_ns() / 1000;
         data4.saddr = sk->__sk_common.skc_rcv_saddr;
         data4.daddr = sk->__sk_common.skc_daddr;
         // a workaround until data4 compiles with separate lport/dport
         data4.pid = pid;
         data4.uid = uid;
-        data4.ports = dport + ((0ULL + lport) << 32);
+        data4.lport = lport;
+        data4.rport = dport;
         if (mep == 0) {
             bpf_get_current_comm(&data4.comm, sizeof(data4.comm));
         } else {
@@ -151,7 +150,6 @@ int kprobe__tcp_set_state(struct pt_regs *ctx, struct sock *sk, int state)
         data6.span_us = delta_us;
         data6.rx_b = rx_b;
         data6.tx_b = tx_b;
-        data6.ts_us = bpf_ktime_get_ns() / 1000;
         bpf_probe_read(&data6.saddr, sizeof(data6.saddr),
             sk->__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
         bpf_probe_read(&data6.daddr, sizeof(data6.daddr),
