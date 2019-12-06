@@ -23,9 +23,7 @@ func formatValueField(value string) string {
 func escapeField(field string) string {
 	var sb strings.Builder
 
-	sb.WriteString("\"")
 	sb.WriteString(strings.Replace(field, "\"", "\\\"", -1))
-	sb.WriteString("\"")
 	return sb.String()
 }
 
@@ -69,7 +67,11 @@ func formatOutput(mapName string, outputStruct reflect.Value,
 			}
 
 			// Add escaped quotes to strings
-			value = escapeField(value.(string))
+			value = value.(string)
+			if !fieldFormat.IsTag {
+				value = escapeField(value.(string))
+				fieldFormat.FormatString = "%q"
+			}
 		} else if fieldFormat.IsIP {
 			ip := make(net.IP, 4)
 			binary.LittleEndian.PutUint32(ip, fieldVal.Interface().(uint32))
