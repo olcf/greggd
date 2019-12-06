@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"reflect"
 
 	"github.com/onsi/gomega/types"
 	"gopkg.in/yaml.v2"
@@ -113,4 +114,13 @@ func ParseConfig(input io.Reader) (*GreggdConfig, error) {
 	}
 
 	return &configStruct, nil
+}
+
+type SocketInput struct {
+	MeasurementName string
+	Fields          map[string]string
+	Tags            map[string]string
+	Bytes           []byte
+	Type            reflect.Type
+	Output          *BPFOutput
 }

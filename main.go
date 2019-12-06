@@ -5,12 +5,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"os/signal"
 	"sync"
 
-	config "github.com/olcf/greggd/config"
+	"github.com/olcf/greggd/communication"
+	"github.com/olcf/greggd/config"
 	tracer "github.com/olcf/greggd/tracer"
 )
 
@@ -77,24 +77,23 @@ Greggd collects and exports low-level tracing data from the eBPF in-kernel virtu
 	errChan := make(chan error)
 	defer close(errChan)
 
-	// Open Socket
-	c, err := net.Dial("unix", configStruct.Globals.SocketPath)
-	if err != nil {
-		fmt.Fprintf(flag.CommandLine.Output(),
-			"main.go: Error dialing socket %s: %s\n",
-			configStruct.Globals.SocketPath, err)
-		return
-	}
+	// Open channel to send data
+	dataChan := make(chan config.SocketInput)
+	defer close(dataChan)
 
 	// Create wait group to watch goroutine progress
 	var wg sync.WaitGroup
-	var mux sync.Mutex
+
+	// Create goroutine for sending to socket
+	wg.Add(1)
+	go communication.BytesToSock(ctx, dataChan, errChan, configStruct.Globals, wg)
 
 	// Create goroutine for each program, increment number of running procs, do
 	// the work
 	for _, program := range configStruct.Programs {
 		wg.Add(1)
-		go tracer.Trace(ctx, program, errChan, configStruct.Globals, c, &mux, &wg)
+		go tracer.Trace(ctx, program, dataChan, errChan, configStruct.Globals,
+			&wg)
 	}
 
 	// Watch for sig-term or errors

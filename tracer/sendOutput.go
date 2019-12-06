@@ -1,23 +1,19 @@
 package tracer
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
-	"net"
 	"reflect"
-	"sync"
 
 	"github.com/olcf/greggd/config"
 	bcc "github.com/josephvoss/gobpf/bcc"
 )
 
 func readPerfChannel(ctx context.Context, outType reflect.Type,
-	dataChan chan []byte, errChan chan error,
-	outputFormat []config.BPFOutputFormat, globals config.GlobalOptions,
-	mapName string, c net.Conn, mux *sync.Mutex) {
+	dataChan chan []byte, outputChan chan config.SocketInput, errChan chan error,
+	output *config.BPFOutput, globals config.GlobalOptions,
+	mapName string) {
 
 	for {
 		select {
@@ -26,23 +22,22 @@ func readPerfChannel(ctx context.Context, outType reflect.Type,
 			return
 		case inputBytes := <-dataChan:
 			tags, fields := make(map[string]string), make(map[string]string)
-			readBytesAndOutput(ctx, outType, inputBytes, tags, fields, errChan,
-				outputFormat, globals, mapName, c, mux)
+			outputChan <- config.SocketInput{
+				MeasurementName: mapName, Fields: fields, Tags: tags,
+				Bytes: inputBytes, Output: output,
+			}
 		}
 	}
 }
 
 func iterateHashMap(ctx context.Context, table *bcc.Table,
-	outType reflect.Type, errChan chan error, output config.BPFOutput,
-	globals config.GlobalOptions, c net.Conn, mux *sync.Mutex) {
+	outType reflect.Type, socketChan chan config.SocketInput, errChan chan error,
+	output *config.BPFOutput, globals config.GlobalOptions) {
 
 	// Get table iterator and iterate over keys
 	tableIter := table.Iter()
 
 	for {
-		// Write values to byte buffer
-		buf := bytes.NewBuffer([]byte{})
-
 		// Iterate. Break if no more keys
 		if !tableIter.Next() {
 			break
@@ -72,83 +67,13 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 		fields := map[string]string{"hash_key": fmt.Sprintf("%d",
 			binary.LittleEndian.Uint64(tableIter.Key()))}
 
-		// Write to buffer. Should also check that write size == reflect size
-		_, err = buf.Write(val)
-		if err != nil {
-			errChan <- fmt.Errorf("tracer.go: Error writing binary to buffer: %s\n",
-				err)
-			return
-		}
-
 		// Write data to struct and send it on
-		readBytesAndOutput(ctx, outType, buf.Bytes(), map[string]string{}, fields,
-			errChan, output.Format, globals, table.ID(), c, mux)
+		socketChan <- config.SocketInput{
+			MeasurementName: table.ID(), Fields: fields, Tags: map[string]string{},
+			Bytes: val, Output: output,
+		}
 	}
 
 	return
 
-}
-
-// Read in data, write to a new struct object of reflect type, format and send
-// to socket
-func readBytesAndOutput(ctx context.Context, outType reflect.Type,
-	inBytes []byte, tags map[string]string, fields map[string]string,
-	errChan chan error, outputFormat []config.BPFOutputFormat,
-	globals config.GlobalOptions, mapName string, c net.Conn, mux *sync.Mutex) {
-
-	// Build out struct
-	outputStruct := reflect.New(outType).Elem()
-
-	// Load input bytes into output struct
-	err := binary.Read(bytes.NewBuffer(inBytes), bcc.GetHostByteOrder(),
-		outputStruct.Addr().Interface())
-	if err != nil {
-		errChan <- fmt.Errorf("tracer.go: Error parsing output: %s\n", err)
-		return
-	}
-
-	// Get influx-like output
-	outputString, err := formatOutput(mapName, outputStruct, tags, fields,
-		outputFormat)
-	if err != nil {
-		errChan <- fmt.Errorf("tracer.go: Error formatting output: %s\n", err)
-		return
-	}
-
-	err = sendOutputToSock(outputString, mux, c)
-	if err != nil {
-		errChan <- fmt.Errorf("tracer.go: Error sending output to socket: %s\n",
-			err)
-		return
-	}
-	if globals.Verbose {
-		switch globals.VerboseFormat {
-		case "json":
-			// Get raw JSON output, does not convert byte arrays to strings
-			outputJson, _ := json.Marshal(outputStruct.Interface())
-			fmt.Printf("%s\n", outputJson)
-		default:
-			fmt.Printf(outputString)
-		}
-	}
-
-}
-
-func sendOutputToSock(outString string, mux *sync.Mutex,
-	c net.Conn) error {
-
-	// Drop empty strings
-	if outString == "" {
-		return nil
-	}
-
-	mux.Lock()
-	defer mux.Unlock()
-
-	_, err := c.Write([]byte(outString))
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
