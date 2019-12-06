@@ -75,10 +75,12 @@ func writeBinaryToStruct(inBytes []byte, outType reflect.Type) (*reflect.Value,
 	error) {
 
 	// Check if input size matches output size
-	if uint64(len(inBytes)) != uint64(outType.Size()) {
-		return nil, fmt.Errorf(
-			"tracer.go: Input byte slice != output struct size\n")
-	}
+	//	if uint64(len(inBytes)) != uint64(outType.Size()) {
+	//		return nil, fmt.Errorf(
+	//			"tracer.go: Input byte slice (%v) != output struct size: (%v)\n",
+	//			len(inBytes), uint64(outType.Size()),
+	//		)
+	//	}
 
 	// Build out struct
 	outputStruct := reflect.New(outType).Elem()
