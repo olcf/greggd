@@ -113,7 +113,9 @@ func influxFormat(keyName string, tags map[string]string,
 
 	var sb strings.Builder
 	// Create influx format string from key name, tags, and fields
-	sb.WriteString(keyName)
+	sb.WriteString("bpf")
+
+	tags["sensor"] = keyName
 
 	nt, nf := len(tags), len(fields)
 
