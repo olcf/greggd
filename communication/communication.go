@@ -53,7 +53,7 @@ func bytesToSocket(ctx context.Context, socketInput config.SocketInput,
 	}
 
 	// Send to socket
-	err = sendOutputToSock(outputString, c, 0)
+	err = sendOutputToSock(outputString, c, 0, globals)
 	if err != nil {
 		errChan <- fmt.Errorf("tracer.go: Error sending output to socket: %s\n",
 			err)
@@ -73,7 +73,8 @@ func bytesToSocket(ctx context.Context, socketInput config.SocketInput,
 	}
 }
 
-func sendOutputToSock(outString string, c net.Conn, errCount int) error {
+func sendOutputToSock(outString string, c net.Conn, errCount int,
+	globals config.GlobalOptions) error {
 
 	// Drop empty strings
 	if outString == "" {
@@ -91,21 +92,12 @@ func sendOutputToSock(outString string, c net.Conn, errCount int) error {
 			)
 		}
 
-		// Check is this is a temporary error
-		// type assert if error provides Temporary() method
-		tempErr, providesTemporary := err.(interface{ Temporary() bool })
-		if providesTemporary && tempErr.Temporary() {
-			// Retry open
-			c, err := net.Dial("unix", c.LocalAddr().String())
-			if err != nil {
-				return fmt.Errorf("communication.go: Error dialing socket %s: %s\n",
-					c.LocalAddr, err)
-			}
-			// Try to send again, incrementing errorCount
-			return sendOutputToSock(outString, c, errCount+1)
+		c, err := net.Dial("unix", globals.SocketPath)
+		if err != nil {
+			return fmt.Errorf("communication.go: Error dialing socket %s: %s\n",
+				globals.SocketPath, err)
 		}
-
-		return err
+		return sendOutputToSock(outString, c, errCount+1, globals)
 	}
 
 	return nil
