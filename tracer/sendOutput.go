@@ -72,6 +72,12 @@ func loopHashMap(ctx context.Context, table *bcc.Table,
 		if !tableIter.Next() {
 			break
 		}
+		// No idea why this some keys are less than uint64 length. Skip if it is
+		if len(tableIter.Key()) < 8 {
+			fmt.Printf("Key is less than full length: %v:%s\n", tableIter.Key(),
+				len(tableIter.Key()))
+			break
+		}
 
 		// Read value
 		val, err := table.Get(tableIter.Key())
