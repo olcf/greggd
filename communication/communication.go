@@ -81,8 +81,7 @@ func sendOutputToSock(outString string, c net.Conn, errCount int,
 		return nil
 	}
 
-	// Throw error if errCount is too high
-
+	// Try to write to socket
 	_, err := c.Write([]byte(outString))
 	if err != nil {
 		// Cancel if we tried this too much
@@ -92,6 +91,7 @@ func sendOutputToSock(outString string, c net.Conn, errCount int,
 			)
 		}
 
+		// If failed, re-dial and retry send incrementing error count
 		c, err := net.Dial("unix", globals.SocketPath)
 		if err != nil {
 			return fmt.Errorf("communication.go: Error dialing socket %s: %s\n",
