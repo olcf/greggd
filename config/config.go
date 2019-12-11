@@ -68,6 +68,8 @@ type BPFOutputFormat struct {
 	FormatString string `yaml:"formatString"`
 	// Set if this should be a tag
 	IsTag bool `yaml:"isTag"`
+	// Set if this field is an IP; assumed to be a tag
+	IsIP bool `yaml:"isIP"`
 	// Filter to apply to values
 	Filter interface{} `yaml:"filter"`
 	// Filters get compiled by <func> and iterated over to check
