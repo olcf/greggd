@@ -92,6 +92,7 @@ func sendOutputToSock(outString string, c net.Conn, errCount int,
 		}
 
 		// If failed, re-dial and retry send incrementing error count
+		c.Close()
 		c, err := net.Dial("unix", globals.SocketPath)
 		if err != nil {
 			return fmt.Errorf("communication.go: Error dialing socket %s: %s\n",
