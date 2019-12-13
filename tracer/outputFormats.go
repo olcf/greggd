@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -181,24 +180,29 @@ func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type,
 
 	var fields []reflect.StructField
 	var intSize int
-	var err error
+	var intInnerSize int
 	// Use data types from array to build struct fields
 	for _, item := range inputArray {
+		isArrayofArrays := false
 		isArray := false
 		intSize = 0
 		itemTypeString := item.Type
 		// Figure out if this is an array. Set isArray and get array size
-		if strings.ContainsAny(itemTypeString, "[") {
+		switch strings.Count(itemTypeString, "[") {
+		case 1:
 			isArray = true
-			sizeArr := strings.Split(strings.Split(itemTypeString, "]")[0], "[")
-			size := sizeArr[len(sizeArr)-1]
-			intSize, err = strconv.Atoi(size)
+			itemTypeString = strings.ReplaceAll(strings.ReplaceAll(itemTypeString, "[", " "), "]", " ")
+			_, err := fmt.Sscanf(itemTypeString, "%s %d ", &itemTypeString, &intSize)
 			if err != nil {
-				return nil, fmt.Errorf("tracer.go: Error converting size %s to int",
-					size)
+				return nil, fmt.Errorf("tracer.go: Error converting %s to array: %s", itemTypeString, err)
 			}
-			// Overwrite itemTypeString with non-array name
-			itemTypeString = strings.Split(itemTypeString, "[")[0]
+		case 2:
+			isArrayofArrays = true
+			itemTypeString = strings.ReplaceAll(strings.ReplaceAll(itemTypeString, "[", " "), "]", " ")
+			_, err := fmt.Sscanf(itemTypeString, "%s %d  %d ", &itemTypeString, &intSize, &intInnerSize)
+			if err != nil {
+				return nil, fmt.Errorf("tracer.go: Error converting %s to array of arrays: %s", itemTypeString, err)
+			}
 		}
 		// Get item type
 		var itemType interface{}
@@ -221,7 +225,12 @@ func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type,
 		}
 
 		// Create struct fields for correct data type
-		if isArray {
+		if isArrayofArrays {
+			fields = append(fields, reflect.StructField{
+				Name: strings.Title(item.Name), Type: reflect.ArrayOf(intSize,
+					reflect.ArrayOf(intInnerSize, reflect.TypeOf(itemType))),
+			})
+		} else if isArray {
 			fields = append(fields, reflect.StructField{
 				Name: strings.Title(item.Name), Type: reflect.ArrayOf(intSize,
 					reflect.TypeOf(itemType)),
