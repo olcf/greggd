@@ -1,0 +1,8 @@
+---
+- name: uid
+  title: Uid
+  short: User Identification Number
+  type: u32
+  description: >
+    Numerical User ID
+...

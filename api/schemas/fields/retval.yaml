@@ -1,0 +1,8 @@
+---
+- name: retval
+  title: Return Code
+  short: Return or Exit code
+  type: int32
+  description: >
+    Exit code gathered from process, syscall, or function
+...

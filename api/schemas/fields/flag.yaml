@@ -1,0 +1,8 @@
+---
+- name: flag
+  title: Flag
+  short: Call Flags
+  type: int32
+  description: >
+    Flags used for call or function. Typically octal or hex.
+...

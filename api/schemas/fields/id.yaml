@@ -1,0 +1,8 @@
+---
+- name: id
+  title: ID
+  short: Call ID
+  type: u64
+  description: >
+    Unique identifier for event. Often pid and thread id from `= bpf_get_current_pid_tgid();`
+...
