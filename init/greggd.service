@@ -1,0 +1,13 @@
+[Unit]
+Description=Global runtime for eBPF-enabled gathering (w/ gumption) daemon
+After=network.target
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=-/etc/sysconfig/greggd
+ExecStart=/usr/sbin/greggd
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
