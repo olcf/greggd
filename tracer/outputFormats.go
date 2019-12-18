@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -33,6 +32,86 @@ func formatTag(tag string) string {
 	sb.WriteString(tag)
 	return sb.String()
 }
+func Max(x, y int) int {
+	if x < y {
+		return y
+	}
+	return x
+}
+
+// Function to read in and parse values. Recursable
+func getFieldValue(fieldVal reflect.Value, fieldFormat config.BPFOutputFormat) (string, error) {
+	var sb strings.Builder
+	var err error
+	var value interface{}
+
+	// If an array, assume byte array
+	if fieldVal.Kind() == reflect.Array {
+		var subBuilder strings.Builder
+		// Check if array of arrays or just an array
+		if fieldVal.Index(0).Kind() == reflect.Array {
+			childFieldFormat := fieldFormat
+			// Overload child formatting
+			childFieldFormat.FormatString = "%s"
+			for i := 0; i < fieldVal.Len(); i++ {
+				value, err = getFieldValue(fieldVal.Index(i), childFieldFormat)
+				if err != nil {
+					return "", fmt.Errorf("tracer.go: Error getting field values: %s\n", err)
+				}
+				if len(value.(string)) == 0 {
+					break
+				}
+				if i != 0 {
+					subBuilder.WriteString(" ")
+				}
+				subBuilder.WriteString(value.(string))
+			}
+			value = subBuilder.String()
+		} else {
+
+			// Convert byte array to string
+			bytesVal := fieldVal.Slice(0, fieldVal.Len()).Bytes()
+			n := bytes.IndexByte(bytesVal, 0)
+			value = string(bytesVal[:Max(n, 0)])
+		}
+
+		// Filter strings on length
+		if len(value.(string)) == 0 {
+			return "", nil
+		}
+
+		// Add escaped quotes to strings
+		value = value.(string)
+		if !fieldFormat.IsTag && fieldFormat.FormatString == "" {
+			value = escapeField(value.(string))
+			fieldFormat.FormatString = "%q"
+		}
+	} else if fieldFormat.IsIP {
+		ip := make(net.IP, 4)
+		binary.LittleEndian.PutUint32(ip, fieldVal.Interface().(uint32))
+		value = ip
+	} else {
+		// Otherwise, save value as a value
+		value = fieldVal
+	}
+	// Filter values
+	value, err = filterValues(value, fieldFormat)
+	if err != nil {
+		return "", fmt.Errorf("tracer.go: Error filtering values: %s\n", err)
+	}
+	if value == nil {
+		return "", nil
+	}
+
+	// Format value as string
+	if fieldFormat.FormatString == "" {
+		fieldFormat.FormatString = "%v"
+	}
+	stringValue := fmt.Sprintf(fieldFormat.FormatString, value)
+	sb.WriteString(stringValue)
+
+	return sb.String(), nil
+}
 
 // Loop over each struct, formatting byte arrays to strings, filtering output,
 // marking as tag or measurement field. Return influx formatted measurement
@@ -43,7 +122,6 @@ func formatOutput(mapName string, outputStruct reflect.Value,
 	fields := make(map[string]string)
 
 	var err error
-	var value interface{}
 	// Iterate over values in struct. Format and filter data types and append to
 	// either tag or field maps
 	for i := 0; i < outputStruct.NumField(); i++ {
@@ -53,48 +131,14 @@ func formatOutput(mapName string, outputStruct reflect.Value,
 		fieldName := strings.ToLower(fieldKind.Name)
 		fieldFormat := outputFormat[i]
 
-		// If an array, assume byte array
-		if fieldKind.Type.Kind() == reflect.Array {
-
-			// Convert byte array to string
-			bytesVal := fieldVal.Slice(0, fieldVal.Len()).Bytes()
-			n := bytes.IndexByte(bytesVal, 0)
-			value = string(bytesVal[:n])
-
-			// Filter strings on length
-			if len(value.(string)) == 0 {
-				return "", err
-			}
-
-			// Add escaped quotes to strings
-			value = value.(string)
-			if !fieldFormat.IsTag {
-				value = escapeField(value.(string))
-				fieldFormat.FormatString = "%q"
-			}
-		} else if fieldFormat.IsIP {
-			ip := make(net.IP, 4)
-			binary.LittleEndian.PutUint32(ip, fieldVal.Interface().(uint32))
-			value = ip
-		} else {
-			// Otherwise, save value as a value
-			value = fieldVal
-		}
-
-		// Filter values
-		value, err = filterValues(value, fieldFormat)
+		stringValue, err := getFieldValue(fieldVal, fieldFormat)
 		if err != nil {
-			return "", fmt.Errorf("tracer.go: Error filtering values: %s\n", err)
+			return "", fmt.Errorf("tracer.go: Error getting field values: %s\n", err)
 		}
-		if value == nil {
-			return "", nil
+		// Filter strings on length
+		if len(stringValue) == 0 {
+			return "", err
 		}
-
-		// Format value as string
-		if fieldFormat.FormatString == "" {
-			fieldFormat.FormatString = "%v"
-		}
-		stringValue := fmt.Sprintf(fieldFormat.FormatString, value)
 
 		// Add to appropriate map for tag or data field
 		if fieldFormat.IsTag || fieldFormat.IsIP {
@@ -181,24 +225,29 @@ func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type,
 
 	var fields []reflect.StructField
 	var intSize int
-	var err error
+	var intInnerSize int
 	// Use data types from array to build struct fields
 	for _, item := range inputArray {
+		isArrayofArrays := false
 		isArray := false
 		intSize = 0
 		itemTypeString := item.Type
 		// Figure out if this is an array. Set isArray and get array size
-		if strings.ContainsAny(itemTypeString, "[") {
+		switch strings.Count(itemTypeString, "[") {
+		case 1:
 			isArray = true
-			sizeArr := strings.Split(strings.Split(itemTypeString, "]")[0], "[")
-			size := sizeArr[len(sizeArr)-1]
-			intSize, err = strconv.Atoi(size)
+			itemTypeString = strings.ReplaceAll(strings.ReplaceAll(itemTypeString, "[", " "), "]", " ")
+			_, err := fmt.Sscanf(itemTypeString, "%s %d ", &itemTypeString, &intSize)
 			if err != nil {
-				return nil, fmt.Errorf("tracer.go: Error converting size %s to int",
-					size)
+				return nil, fmt.Errorf("tracer.go: Error converting %s to array: %s", itemTypeString, err)
 			}
-			// Overwrite itemTypeString with non-array name
-			itemTypeString = strings.Split(itemTypeString, "[")[0]
+		case 2:
+			isArrayofArrays = true
+			itemTypeString = strings.ReplaceAll(strings.ReplaceAll(itemTypeString, "[", " "), "]", " ")
+			_, err := fmt.Sscanf(itemTypeString, "%s %d  %d ", &itemTypeString, &intSize, &intInnerSize)
+			if err != nil {
+				return nil, fmt.Errorf("tracer.go: Error converting %s to array of arrays: %s", itemTypeString, err)
+			}
 		}
 		// Get item type
 		var itemType interface{}
@@ -221,7 +270,12 @@ func buildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type,
 		}
 
 		// Create struct fields for correct data type
-		if isArray {
+		if isArrayofArrays {
+			fields = append(fields, reflect.StructField{
+				Name: strings.Title(item.Name), Type: reflect.ArrayOf(intSize,
+					reflect.ArrayOf(intInnerSize, reflect.TypeOf(itemType))),
+			})
+		} else if isArray {
 			fields = append(fields, reflect.StructField{
 				Name: strings.Title(item.Name), Type: reflect.ArrayOf(intSize,
 					reflect.TypeOf(itemType)),
