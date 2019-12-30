@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 
 	"github.com/olcf/greggd/config"
@@ -17,8 +16,7 @@ func BuildStructFromArray(inputArray []config.BPFOutputFormat) (reflect.Type,
 	error) {
 
 	var fields []reflect.StructField
-	var intSize int
-	var err error
+	var intSize, intInnerSize int
 	// Use data types from array to build struct fields
 	for _, item := range inputArray {
 		isArrayofArrays := false
