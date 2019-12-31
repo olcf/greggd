@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"reflect"
 
 	"github.com/onsi/gomega/types"
 	"gopkg.in/yaml.v2"
@@ -52,6 +53,8 @@ type BPFOutput struct {
 	Type string `yaml:"type"`
 	// If not perf output, how often to poll output
 	Poll string `yaml:"poll"`
+	// Should we clear hash on poll
+	Clear bool `yaml:"clear"`
 	// Format of the struct
 	Format []BPFOutputFormat `yaml:"format"`
 }
@@ -113,4 +116,13 @@ func ParseConfig(input io.Reader) (*GreggdConfig, error) {
 	}
 
 	return &configStruct, nil
+}
+
+type SocketInput struct {
+	MeasurementName string
+	Fields          map[string]string
+	Tags            map[string]string
+	Bytes           []byte
+	Type            reflect.Type
+	Output          *BPFOutput
 }
