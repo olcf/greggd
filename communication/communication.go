@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/olcf/greggd/config"
 )
@@ -81,11 +82,11 @@ func sendOutputToSock(outString string, c net.Conn, errCount int,
 		return nil
 	}
 
-	// Try to write to socket
+	// Try to write to socket, retrying on failures
 	_, err := c.Write([]byte(outString))
 	if err != nil {
 		// Cancel if we tried this too much
-		if errCount >= 5 {
+		if errCount >= 1 {
 			return fmt.Errorf(
 				"communication.go: Error re-dialing socket. Failed 5 times: %s\n", err,
 			)
@@ -102,4 +103,28 @@ func sendOutputToSock(outString string, c net.Conn, errCount int,
 	}
 
 	return nil
+}
+
+// Retry a given function for a number of attempts with a given delay
+func retry(attempts int, delay time.Duration, globals config.GlobalOptions,
+	f func() error) error {
+
+	err := f()
+	if err != nil {
+		// Increment attempts. If reached max retry just return error
+		attempts++
+		if attempts >= globals.MaxRetryCount {
+			return err
+		}
+		// Wait the delay. If exponential retry is set, double delay
+		time.Sleep(delay)
+		if globals.RetryExponentialBackoff {
+			delay = delay * 2
+		}
+		// Retry the function
+		return retry(attempts, delay, globals, f)
+	}
+
+	return nil
+
 }
