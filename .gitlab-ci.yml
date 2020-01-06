@@ -1,0 +1,28 @@
+---
+
+stages:
+  - build rpm
+
+build rpm golang v1.13:
+  stage: build rpm
+  image: greggd-golang-amd64:v1.13
+  artifacts:
+    paths:
+      - "*.rpm"
+    expire_in: 1 week
+  script:
+    - cd ./cmd/greggd
+    - go build
+    - cd ../../
+    - mv ./cmd/greggd/greggd ./
+    - |
+      fpm -s dir -t rpm --architecture "x86_64" \
+      -n greggd \
+      --depends 'bcc >= 0.8.0' \
+      --rpm-dist "el7" \
+      --url https://github.com/olcf/greggd \
+      --description "Global runtime for eBPF-enabled gathering (w/ gumption) daemon" \
+      --iteration "$(git rev-parse --short HEAD)" \
+      --version "$(git describe --tags --abbrev=0)" \
+      "$(pwd)/greggd=/usr/sbin/" "$(pwd)/csrc/=/usr/share/greggd/c/" \
+      "$(pwd)/init/greggd.service=/usr/lib/systemd/system/"

@@ -1,0 +1,32 @@
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: greggd-golang-amd64
+
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: greggd-golang-amd64
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: greggd-golang-amd64:v1.13
+  runPolicy: Serial
+  source:
+    dockerfile: |
+      FROM rhel7-base-amd64:latest
+
+      RUN cat /etc/yum.repos.d/*; \
+        yum install -y ruby ruby-devel rubygem-bundler make gcc rpm-build git; \
+        yum install -y golang-1.13 bcc bcc-devel; \
+        gem install fpm; \
+        yum clean all
+
+      CMD /bin/bash
+  strategy:
+    type: Docker
+    dockerStrategy:
+      noCache: true
