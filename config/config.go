@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"time"
 
 	"github.com/onsi/gomega/types"
 	"gopkg.in/yaml.v2"
@@ -24,6 +25,14 @@ type GlobalOptions struct {
 	VerboseFormat string `yaml:"verboseFormat"`
 	// Log measurements to stdout. Overwritten by command line value if set
 	Verbose bool `yaml:"verbose"`
+	// Maximum number of times to attempt socket communication
+	MaxRetryCount int `yaml:"maxRetryCount"`
+	// Use exponential backoff. Enabled by default
+	RetryExponentialBackoff bool `yaml:"retryExponentialBackoff"`
+	// Time in golang format to delay retries. Set to 100ms by default
+	RetryDelay string `yaml:"retryDelay"`
+	// Compiled retry as time.Duration
+	CompiledRetryDelay time.Duration
 }
 
 type BPFProgram struct {
@@ -84,11 +93,27 @@ func ParseConfig(input io.Reader) (*GreggdConfig, error) {
 			err)
 	}
 
-	configStruct := GreggdConfig{}
+	// Set config defaults
+	configStruct := GreggdConfig{
+		Globals: GlobalOptions{
+			MaxRetryCount:           8,
+			RetryExponentialBackoff: true,
+			RetryDelay:              "100ms",
+		},
+	}
+
 	err = yaml.Unmarshal(buf.Bytes(), &configStruct)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"config.go: Error unmarshalling config into struct:\n%s", err)
+	}
+
+	// Compile time
+	configStruct.Globals.CompiledRetryDelay, err =
+		time.ParseDuration(configStruct.Globals.RetryDelay)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"config.go: Error parsing retry duration:\n%s", err)
 	}
 
 	// Compile filters into go mega filters. Need to edit the struct for each

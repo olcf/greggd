@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/olcf/greggd/config"
 )
@@ -15,8 +16,15 @@ func BytesToSock(ctx context.Context, dataChan chan config.SocketInput,
 
 	defer wg.Done()
 
-	// Open socket
-	c, err := net.Dial("unix", globals.SocketPath)
+	var c net.Conn
+	// Try to open socket
+	err := retry(0, globals.CompiledRetryDelay, globals, func() error {
+		conn, err := net.Dial("unix", globals.SocketPath)
+		// Save open conn to var outside our scope
+		c = conn
+		return err
+	})
+
 	if err != nil {
 		errChan <- fmt.Errorf("communication.go: Error dialing socket %s: %s\n",
 			globals.SocketPath, err)
@@ -81,25 +89,39 @@ func sendOutputToSock(outString string, c net.Conn, errCount int,
 		return nil
 	}
 
-	// Try to write to socket
-	_, err := c.Write([]byte(outString))
-	if err != nil {
-		// Cancel if we tried this too much
-		if errCount >= 5 {
-			return fmt.Errorf(
-				"communication.go: Error re-dialing socket. Failed 5 times: %s\n", err,
-			)
-		}
+	// Try to write to socket, retrying on failures
+	err := retry(0, globals.CompiledRetryDelay, globals, func() error {
+		_, err := c.Write([]byte(outString))
+		return err
+	})
 
-		// If failed, re-dial and retry send incrementing error count
-		c.Close()
-		c, err := net.Dial("unix", globals.SocketPath)
-		if err != nil {
-			return fmt.Errorf("communication.go: Error dialing socket %s: %s\n",
-				globals.SocketPath, err)
-		}
-		return sendOutputToSock(outString, c, errCount+1, globals)
+	if err != nil {
+		return err
 	}
 
 	return nil
+}
+
+// Retry a given function for a number of attempts with a given delay
+func retry(attempts int, delay time.Duration, globals config.GlobalOptions,
+	f func() error) error {
+
+	err := f()
+	if err != nil {
+		// Increment attempts. If reached max retry just return error
+		attempts++
+		if attempts >= globals.MaxRetryCount {
+			return err
+		}
+		// Wait the delay. If exponential retry is set, double delay
+		time.Sleep(delay)
+		if globals.RetryExponentialBackoff {
+			delay = delay * 2
+		}
+		// Retry the function
+		return retry(attempts, delay, globals, f)
+	}
+
+	return nil
+
 }
