@@ -1,0 +1,8 @@
+---
+- name: comm
+  title: Command
+  short: Command Name
+  type: char[16]
+  description: >
+    String for calling process name
+...

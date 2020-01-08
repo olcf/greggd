@@ -1,0 +1,8 @@
+---
+- name: fname
+  title: File Name
+  short: File Name
+  type: char[255]
+  description: >
+    Full path to file
+...

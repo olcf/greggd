@@ -1,0 +1,8 @@
+---
+- name: span_us
+  title: Span
+  short: Duration in microseconds
+  type: u64
+  description: >
+    Length of event (process, syscall, etc.) in microseconds
+...

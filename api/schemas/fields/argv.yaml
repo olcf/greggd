@@ -1,0 +1,8 @@
+---
+- name: argv
+  title: Argument String
+  short: Array of arguments combined into single string
+  type: char[12][32]
+  description: >
+    Collected as 12 32-byte strings then combined into a single string for consumption.
+...
