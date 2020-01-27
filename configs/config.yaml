@@ -44,7 +44,7 @@ programs:
           - name: flag
             type: int32
             formatString: "%#o"
-  - source: /tmp/greggd/execsnoop.c
+  - source: /usr/share/greggd/c/execsnoop.c
     # Events to bind program to
     events:
       - type: kprobe

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/olcf/greggd/config"
+	"github.com/olcf/greggd/pkg/config"
 )
 
 func BytesToSock(ctx context.Context, dataChan chan config.SocketInput,
@@ -115,6 +115,7 @@ func retry(attempts int, delay time.Duration, globals config.GlobalOptions,
 		}
 		// Wait the delay. If exponential retry is set, double delay
 		time.Sleep(delay)
+		fmt.Println("Backing off")
 		if globals.RetryExponentialBackoff {
 			delay = delay * 2
 		}

@@ -9,9 +9,9 @@ import (
 	"os/signal"
 	"sync"
 
-	"github.com/olcf/greggd/communication"
-	"github.com/olcf/greggd/config"
-	tracer "github.com/olcf/greggd/tracer"
+	"github.com/olcf/greggd/pkg/communication"
+	"github.com/olcf/greggd/pkg/config"
+	"github.com/olcf/greggd/pkg/tracer"
 )
 
 var (

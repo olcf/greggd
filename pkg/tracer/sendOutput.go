@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/olcf/greggd/config"
+	"github.com/olcf/greggd/pkg/config"
 	bcc "github.com/josephvoss/gobpf/bcc"
 )
 

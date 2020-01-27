@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/olcf/greggd/config"
+	"github.com/olcf/greggd/pkg/config"
 )
 
 // Use reflect package to build a new type for binary output unmarshalling at
