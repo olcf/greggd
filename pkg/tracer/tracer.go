@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/olcf/greggd/communication"
-	"github.com/olcf/greggd/config"
+	"github.com/olcf/greggd/pkg/communication"
+	"github.com/olcf/greggd/pkg/config"
 	bcc "github.com/josephvoss/gobpf/bcc"
 )
 

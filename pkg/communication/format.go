@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/olcf/greggd/config"
+	"github.com/olcf/greggd/pkg/config"
 )
 
 func formatValueField(value string) string {
