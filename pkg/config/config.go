@@ -110,6 +110,20 @@ func ParseConfig(input io.Reader) (*GreggdConfig, error) {
 			"config.go: Error unmarshalling config into struct:\n%s", err)
 	}
 
+	// Set default for key type
+	for iProg := range configStruct.Programs {
+		prog := &configStruct.Programs[iProg]
+		for iOutput := range prog.Outputs {
+			output := &prog.Outputs[iOutput]
+			if output.Key.Type == "" {
+				output.Key.Type = "u32"
+			}
+			if output.Key.Name == "" {
+				output.Key.Name = "hash_key"
+			}
+		}
+	}
+
 	// Compile time
 	configStruct.Globals.CompiledRetryDelay, err =
 		time.ParseDuration(configStruct.Globals.RetryDelay)
