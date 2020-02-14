@@ -25,14 +25,15 @@ func readPerfChannel(ctx context.Context, outType reflect.Type,
 			tags, fields := make(map[string]string), make(map[string]string)
 			outputChan <- config.SocketInput{
 				MeasurementName: mapName, Fields: fields, Tags: tags,
-				Bytes: inputBytes, Output: output, Type: outType,
+				DataBytes: inputBytes, OutputConfig: output, DataType: outType,
 			}
 		}
 	}
 }
 
 func iterateHashMap(ctx context.Context, table *bcc.Table,
-	outType reflect.Type, socketChan chan config.SocketInput, errChan chan error,
+	outType reflect.Type, keyType reflect.Type,
+	socketChan chan config.SocketInput, errChan chan error,
 	output *config.BPFOutput, globals config.GlobalOptions) {
 
 	sleepDuration, err := time.ParseDuration(output.Poll)
@@ -46,14 +47,16 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 	defer ticker.Stop()
 
 	// Infinite loop, call loopHashMap every polling period
-	loopHashMap(ctx, table, outType, socketChan, errChan, output, globals)
+	loopHashMap(ctx, table, outType, keyType, socketChan, errChan, output,
+		globals)
 	for {
 		select {
 		case <-ctx.Done():
 			fmt.Println("Done")
 			return
 		case <-ticker.C:
-			loopHashMap(ctx, table, outType, socketChan, errChan, output, globals)
+			loopHashMap(ctx, table, outType, keyType, socketChan, errChan, output,
+				globals)
 		}
 	}
 
@@ -61,7 +64,8 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 }
 
 func loopHashMap(ctx context.Context, table *bcc.Table,
-	outType reflect.Type, socketChan chan config.SocketInput, errChan chan error,
+	outType reflect.Type, keyType reflect.Type,
+	socketChan chan config.SocketInput, errChan chan error,
 	output *config.BPFOutput, globals config.GlobalOptions) {
 
 	// Get table iterator and iterate over keys
@@ -70,10 +74,12 @@ func loopHashMap(ctx context.Context, table *bcc.Table,
 	for {
 		// Iterate. Break if no more keys
 		if !tableIter.Next() {
+			fmt.Printf("Reached end of map\n")
 			break
 		}
 		// No idea why this some keys are less than uint64 length. Skip if it is
-		if len(tableIter.Key()) < 8 {
+		// It's b/c some keys are less than uint64 dumb dumb
+		if len(tableIter.Key()) < int(keyType.Size()) {
 			fmt.Printf("Key is less than full length: %v:%s\n", tableIter.Key(),
 				len(tableIter.Key()))
 			break
@@ -106,7 +112,8 @@ func loopHashMap(ctx context.Context, table *bcc.Table,
 		// Write data to struct and send it on
 		socketChan <- config.SocketInput{
 			MeasurementName: table.ID(), Fields: fields, Tags: map[string]string{},
-			Bytes: val, Output: output, Type: outType,
+			KeyData: tableIter.Key(), KeyType: keyType, DataType: outType,
+			DataBytes: val, OutputConfig: output,
 		}
 	}
 }

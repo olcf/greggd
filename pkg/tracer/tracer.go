@@ -20,7 +20,7 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 
 	defer wg.Done()
 
-	// Build output data structure
+	// Build output value data structure
 	outputType, err := communication.BuildStructFromArray(output.Format)
 	if err != nil {
 		errChan <- fmt.Errorf("tracer.go: Error building output struct: %s\n", err)
@@ -54,7 +54,16 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 			&output, globals, output.Id)
 		perfMap.Stop()
 	case "BPF_HASH":
-		iterateHashMap(ctx, table, outputType, dataChan, errChan, &output,
+		// If hash, build output hash key data structure
+		keyType, err := communication.BuildStructFromArray(
+			[]config.BPFOutputFormat{output.Key})
+		if err != nil {
+			errChan <- fmt.Errorf(
+				"tracer.go: Error building hash key type: %s\n", err)
+			return
+		}
+
+		iterateHashMap(ctx, table, keyType, outputType, dataChan, errChan, &output,
 			globals)
 	default:
 		errChan <- fmt.Errorf("tracer.go: Output type %s is not supported",

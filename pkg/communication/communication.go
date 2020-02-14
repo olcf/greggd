@@ -44,8 +44,27 @@ func BytesToSock(ctx context.Context, dataChan chan config.SocketInput,
 func bytesToSocket(ctx context.Context, socketInput config.SocketInput,
 	errChan chan error, globals config.GlobalOptions, c net.Conn) {
 
+	// Write key to struct
+	if len(socketInput.KeyData) != 0 {
+		keyData, err := writeBinaryToStruct(socketInput.KeyData,
+			socketInput.KeyType)
+		if err != nil {
+			errChan <- fmt.Errorf("tracer.go: Error writing key to struct: %s\n",
+				err)
+			return
+		}
+		keyDataString, err := getFieldValue(*keyData, socketInput.OutputConfig.Key)
+		if err != nil {
+			errChan <- fmt.Errorf("tracer.go: Error writing key to string: %s\n",
+				err)
+			return
+		}
+		socketInput.Fields[socketInput.OutputConfig.Key.Name] = keyDataString
+	}
+
 	// Write data to struct
-	outputStruct, err := writeBinaryToStruct(socketInput.Bytes, socketInput.Type)
+	outputStruct, err := writeBinaryToStruct(socketInput.DataBytes,
+		socketInput.DataType)
 	if err != nil {
 		errChan <- fmt.Errorf("tracer.go: Error writing binary to struct: %s\n",
 			err)
@@ -54,7 +73,7 @@ func bytesToSocket(ctx context.Context, socketInput config.SocketInput,
 
 	// Influx format
 	outputString, err := FormatOutput(socketInput.MeasurementName, *outputStruct,
-		socketInput.Tags, socketInput.Fields, socketInput.Output.Format)
+		socketInput.Tags, socketInput.Fields, socketInput.OutputConfig.Format)
 	if err != nil {
 		errChan <- fmt.Errorf("tracer.go: Error formatting output: %s\n", err)
 		return

@@ -83,8 +83,10 @@ type BPFOutputFormat struct {
 	IsIP bool `yaml:"isIP"`
 	// Filter to apply to values
 	Filter interface{} `yaml:"filter"`
-	// Filters get compiled by <func> and iterated over to check
+	// Filters get compiled by ParseConfig and iterated over to check
 	CompiledFilter types.GomegaMatcher
+	// Types get compiled by ParseConfig and iterated over to check
+	CompiledType reflect.Type
 }
 
 func ParseConfig(input io.Reader) (*GreggdConfig, error) {
@@ -163,7 +165,9 @@ type SocketInput struct {
 	MeasurementName string
 	Fields          map[string]string
 	Tags            map[string]string
-	Bytes           []byte
-	Type            reflect.Type
-	Output          *BPFOutput
+	KeyData         []byte
+	KeyType         reflect.Type
+	DataBytes       []byte
+	DataType        reflect.Type
+	OutputConfig    *BPFOutput
 }
