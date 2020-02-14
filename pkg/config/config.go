@@ -65,7 +65,7 @@ type BPFOutput struct {
 	// Should we clear hash on poll
 	Clear bool `yaml:"clear"`
 	// Hash keys format
-	Key BPFOutputFormat `yaml:"Key"`
+	Key BPFOutputFormat `yaml:"key"`
 	// Format of the struct
 	Format []BPFOutputFormat `yaml:"format"`
 }

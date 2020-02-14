@@ -63,8 +63,8 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 			return
 		}
 
-		iterateHashMap(ctx, table, keyType, outputType, dataChan, errChan, &output,
-			globals)
+		iterateHashMap(ctx, table, outputType, keyType.Field(0).Type, dataChan,
+			errChan, &output, globals)
 	default:
 		errChan <- fmt.Errorf("tracer.go: Output type %s is not supported",
 			output.Type)

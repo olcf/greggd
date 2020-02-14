@@ -2,7 +2,6 @@ package tracer
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"reflect"
 	"time"
@@ -105,15 +104,11 @@ func loopHashMap(ctx context.Context, table *bcc.Table,
 			}
 		}
 
-		// Save key as a field
-		fields := map[string]string{"hash_key": fmt.Sprintf("%d",
-			binary.LittleEndian.Uint64(tableIter.Key()))}
-
 		// Write data to struct and send it on
 		socketChan <- config.SocketInput{
-			MeasurementName: table.ID(), Fields: fields, Tags: map[string]string{},
-			KeyData: tableIter.Key(), KeyType: keyType, DataType: outType,
-			DataBytes: val, OutputConfig: output,
+			MeasurementName: table.ID(), Fields: map[string]string{},
+			Tags: map[string]string{}, KeyData: tableIter.Key(), KeyType: keyType,
+			DataType: outType, DataBytes: val, OutputConfig: output,
 		}
 	}
 }
