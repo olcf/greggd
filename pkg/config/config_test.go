@@ -23,7 +23,7 @@ func TestParseConfigFailsOnBadReader(t *testing.T) {
 	fakeReader = 0
 	_, err := ParseConfig(fakeReader)
 	if err == nil {
-		t.Errorf("Faulty reader did not throw error!")
+		t.Errorf("Faulty reader did not throw error.")
 	}
 }
 
@@ -32,6 +32,41 @@ func TestParseConfigFailsOnBadYAML(t *testing.T) {
 	badYAML := strings.NewReader("This isn't valid YAML")
 	_, err := ParseConfig(badYAML)
 	if err == nil {
-		t.Errorf("Invalid input YAML did not throw error!")
+		t.Errorf("Invalid input YAML did not throw error.")
+	}
+}
+
+// Confirm default global values will get set
+func TestParseConfigGlobalDefaults(t *testing.T) {
+	emptyConfig := strings.NewReader("")
+	testConfig, err := ParseConfig(emptyConfig)
+	if err != nil {
+		t.Errorf("Error thrown when not expected: %v", err)
+		return
+	}
+	if testConfig.Globals.MaxRetryCount == 0 {
+		t.Errorf("Default value for config not set")
+	}
+}
+
+// Confirm default values for key set
+func TestParseConfigProgramKeyDefaults(t *testing.T) {
+	emptyConfig := strings.NewReader(`globals: {}
+programs: [{source: fake, outputs: [type: fake]}]
+`)
+	testConfig, err := ParseConfig(emptyConfig)
+	if err != nil {
+		t.Errorf("Error thrown when not expected: %v", err)
+		return
+	}
+	if len(testConfig.Programs) == 0 || len(testConfig.Programs[0].Outputs) == 0 {
+		t.Errorf("Needed config arrays not populated: %v", err)
+		return
+	}
+	if testConfig.Programs[0].Outputs[0].Key.Name == "" {
+		t.Errorf("Default value for program key name not set")
+	}
+	if testConfig.Programs[0].Outputs[0].Key.Type == "" {
+		t.Errorf("Default value for program key type not set")
 	}
 }
