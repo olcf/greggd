@@ -2,8 +2,17 @@ package config
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+
+	"github.com/onsi/gomega"
+	"reflect"
+	"time"
 )
 
 func TestParseConfig(t *testing.T) {
@@ -90,5 +99,35 @@ func TestParseConfigRetryTimeCompile(t *testing.T) {
 	}
 	if testConfig.Globals.CompiledRetryDelay.String() == "" {
 		t.Errorf("Compiled retryDelay is not populated time.duration object")
+	}
+}
+
+func TestParseConfigCompleteExample(t *testing.T) {
+	configFixture := &GreggdConfig{Globals: GlobalOptions{
+		SocketPath: "/run/greggd.sock", VerboseFormat: "influx", Verbose: true,
+		MaxRetryCount: 1, RetryDelay: "100ms", RetryExponentialBackoff: true},
+		Programs: []BPFProgram{{Source: "/usr/share/greggd/c/opensnoop.c",
+			Events: []BPFEvent{{Type: "kprobe", LoadFunc: "trace_entry",
+				AttachTo: "do_sys_open"}, {Type: "kretprobe", LoadFunc: "trace_return",
+				AttachTo: "do_sys_open"}}, Outputs: []BPFOutput{{
+				Type: "BPF_PERF_OUTPUT", Id: "opensnoop", Key: BPFOutputFormat{
+					Name: "hash_key", Type: "u32"}, Format: []BPFOutputFormat{
+					{Name: "id", Type: "u64"}, {Name: "fname", Type: "char[255]", IsTag: true}}}}},
+		},
+	}
+	f, err := os.Open("testdata/example_config.yaml")
+	if err != nil {
+		t.Errorf("Error thrown when opening config file test fixture: %v", err)
+		return
+	}
+	testConfig, err := ParseConfig(f)
+	if err != nil {
+		t.Errorf("Error thrown when not expected: %v", err)
+		return
+	}
+	fmt.Printf("%v\n%v\n", configFixture, testConfig)
+	ignoreTypes := cmpopts.IgnoreTypes(time.Second, gomega.BeFalse(), reflect.TypeOf((int)(0)))
+	if !cmp.Equal(configFixture, testConfig, ignoreTypes) {
+		t.Errorf("Fixture and expected config do not match")
 	}
 }
