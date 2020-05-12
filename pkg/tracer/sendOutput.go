@@ -58,8 +58,6 @@ func iterateHashMap(ctx context.Context, table *bcc.Table,
 				globals)
 		}
 	}
-
-	return
 }
 
 func loopHashMap(ctx context.Context, table *bcc.Table,
@@ -79,7 +77,7 @@ func loopHashMap(ctx context.Context, table *bcc.Table,
 		// No idea why this some keys are less than uint64 length. Skip if it is
 		// It's b/c some keys are less than uint64 dumb dumb
 		if len(tableIter.Key()) < int(keyType.Size()) {
-			fmt.Printf("Key is less than full length: %v:%s\n", tableIter.Key(),
+			fmt.Printf("Key is less than full length: %v:%v\n", tableIter.Key(),
 				len(tableIter.Key()))
 			break
 		}
@@ -87,7 +85,7 @@ func loopHashMap(ctx context.Context, table *bcc.Table,
 		// Read value
 		val, err := table.Get(tableIter.Key())
 		if err != nil {
-			errChan <- fmt.Errorf("tracer.go: Error getting key %s from table: %s\n",
+			errChan <- fmt.Errorf("tracer.go: Error getting key %s from table %s: %s\n",
 				tableIter.Key(), table.ID(), tableIter.Err())
 			return
 		}
@@ -98,7 +96,7 @@ func loopHashMap(ctx context.Context, table *bcc.Table,
 			err = table.Set(tableIter.Key(), clearBytes)
 			if err != nil {
 				errChan <- fmt.Errorf(
-					"tracer.go: Error clearing key %s from table: %s\n", tableIter.Key(),
+					"tracer.go: Error clearing key %s from table %s: %s\n", tableIter.Key(),
 					table.ID(), err)
 				return
 			}
