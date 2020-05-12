@@ -12,7 +12,7 @@ import (
 )
 
 func BytesToSock(ctx context.Context, dataChan chan config.SocketInput,
-	errChan chan error, globals config.GlobalOptions, wg sync.WaitGroup) {
+	errChan chan error, globals config.GlobalOptions, wg *sync.WaitGroup) {
 
 	defer wg.Done()
 

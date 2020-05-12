@@ -133,7 +133,8 @@ func Trace(ctx context.Context, program config.BPFProgram,
 
 	source, err := ioutil.ReadFile(program.Source)
 	if err != nil {
-		fmt.Errorf("\ntracer.go: Failed to read %s:\n%s", program.Source, err)
+		errChan <- fmt.Errorf("tracer.go: Failed to read pgrogra source %s:%s\n",
+			program.Source, err)
 	}
 
 	// Compile a bpf module, load it into the kernel. Pass empty c flags to bcc
@@ -146,7 +147,8 @@ func Trace(ctx context.Context, program config.BPFProgram,
 	for _, event := range program.Events {
 		err = attachAndLoadEvent(event, m)
 		if err != nil {
-			errChan <- err
+			errChan <- fmt.Errorf("tracer.go: Unable to attach to call %+v: %s\n",
+				event, err)
 			return
 		}
 	}

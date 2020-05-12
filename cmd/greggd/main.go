@@ -86,7 +86,8 @@ Greggd collects and exports low-level tracing data from the eBPF in-kernel virtu
 
 	// Create goroutine for sending to socket
 	wg.Add(1)
-	go communication.BytesToSock(ctx, dataChan, errChan, configStruct.Globals, wg)
+	go communication.BytesToSock(ctx, dataChan, errChan, configStruct.Globals,
+		&wg)
 
 	// Create goroutine for each program, increment number of running procs, do
 	// the work
