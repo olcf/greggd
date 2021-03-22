@@ -69,3 +69,9 @@ Ideas for the current direction of this tool.
   * Switch to compiled byte code
   * Outside dependencies removed
   * Thorough build process for new kernels
+
+## Change log
+
+### 1.1.0
+
+* Bump gobpf and bcc from 0.10.0 to 0.14.0
