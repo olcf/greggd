@@ -7,9 +7,9 @@ import (
 	"strings"
 	"sync"
 
+	bcc "github.com/josephvoss/gobpf/bcc"
 	"github.com/olcf/greggd/pkg/communication"
 	"github.com/olcf/greggd/pkg/config"
-	bcc "github.com/josephvoss/gobpf/bcc"
 )
 
 // Watch each configured memory map. Read perf events as they are sent.
@@ -42,7 +42,8 @@ func pollOutputMaps(ctx context.Context, output config.BPFOutput,
 		inputChan := make(chan []byte)
 		defer close(inputChan)
 
-		perfMap, err := bcc.InitPerfMap(table, inputChan)
+		// Lost perf messages chan not implemented, set to nil
+		perfMap, err := bcc.InitPerfMap(table, inputChan, nil)
 		if err != nil {
 			errChan <- fmt.Errorf("tracer.go: Error building perf map: %s\n", err)
 			return
@@ -83,7 +84,8 @@ func attachAndLoadEvent(event config.BPFEvent, m *bcc.Module) error {
 			return err
 		}
 
-		err = m.AttachKprobe(event.AttachTo, fd)
+		// use kernel default for maxactive instances probed simultaneously
+		err = m.AttachKprobe(event.AttachTo, fd, -1)
 		if err != nil {
 			return err
 		}
@@ -93,7 +95,8 @@ func attachAndLoadEvent(event config.BPFEvent, m *bcc.Module) error {
 			return err
 		}
 
-		err = m.AttachKretprobe(event.AttachTo, fd)
+		// use kernel default for maxactive instances probed simultaneously
+		err = m.AttachKretprobe(event.AttachTo, fd, -1)
 		if err != nil {
 			return err
 		}
