@@ -1,0 +1,43 @@
+---
+# Variables to set for all program traces
+globals:
+  # Socket to open
+  socketPath: /run/greggd.sock
+  # Format for verbose output
+  verboseFormat: influx
+
+# Hash of all programs to load
+programs:
+  - source: /usr/share/greggd/c/execsnoop.c
+    # Events to bind program to
+    events:
+      - type: kprobe
+        loadFunc: syscall__execve
+        attachTo: __x64_sys_execve
+      - type: kretprobe
+        loadFunc: do_ret_sys_execve
+        attachTo: __x64_sys_execve
+    outputs:
+      - type: BPF_PERF_OUTPUT
+        id: execs
+        format:
+          - name: pid
+            type: u32
+            isTag: true
+          - name: ppid
+            type: u32
+            isTag: true
+          - name: uid
+            type: u32
+            isTag: true
+          - name: comm
+            type: char[16]
+            isTag: true
+          - name: env
+            type: char[12][32]
+          - name: argv
+            type: char[12][32]
+          - name: retval
+            type: int32
+          - name: span_us
+            type: u64
