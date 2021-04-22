@@ -101,29 +101,34 @@ int syscall__udp_destroy_sock(struct pt_regs *ctx, struct sock *sk) {
     // Set 0 padding
     __builtin_memset(&edata, 0, sizeof(edata));
 
-    // Lookup values we need
-    u64 *tsp, delta_us;
-    struct sendrecv_t *srp;
-    tsp = socket_span.lookup(&sk);
-    srp = socket_data.lookup(&sk);
-    // Check if we missed the socket creation. Exit if so
-    if (tsp == 0) || (srp == 0) goto destroy_end;
+    // Check if ipv4 or ipv6
+    // TODO: implement ipv6
+    u16 family = sk=>__sk_common.skc_family;
+    if (family == AF_INET) {
+      // Lookup values we need
+      u64 *tsp, delta_us;
+      struct sendrecv_t *srp;
+      tsp = socket_span.lookup(&sk);
+      srp = socket_data.lookup(&sk);
+      // Check if we missed the socket creation. Exit if so
+      if ((tsp == 0) || (srp == 0)) goto destroy_end;
 
-    // calculate lifespan
-    delta_us = (bpf_ktime_get_ns() - *tsp) / 1000;
-    edata.span_us = delta_us;
-    // calculate data sent
-    edata.tx_b = srp->tx_b;
-    edata.rx_b = srp->rx_b;
-    edata.events = srp->events;
+      // calculate lifespan
+      delta_us = (bpf_ktime_get_ns() - *tsp) / 1000;
+      edata.span_us = delta_us;
+      // calculate data sent
+      edata.tx_b = srp->tx_b;
+      edata.rx_b = srp->rx_b;
+      edata.events = srp->events;
 
-    // Load comm, port, addrs into struct
-    build_udp_event(ctx, sk, &edata);
+      // Load comm, port, addrs into struct
+      build_udp_event(ctx, sk, &edata);
 
-    // Output
-    udp_sockets.perf_submit(ctx, &edata, sizeof(edata));
+      // Output
+      udp_sockets.perf_submit(ctx, &edata, sizeof(edata));
+    }
 
-destory_end:;
+destroy_end:;
     socket_data.delete(&sk);
     socket_span.delete(&sk);
     return 0;
