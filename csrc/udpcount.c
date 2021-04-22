@@ -8,13 +8,22 @@ struct event_data_t {
   u32 daddr;
   u16 sport;
   u16 dport;
-  u64 tx_b;
-  u64 rx_b;
+  u32 tx_b;
+  u32 rx_b;
+  u64 span_us;
   char comm[TASK_COMM_LEN];
   u32 uid;
 };
 
 BPF_PERF_OUTPUT(udp_sockets);
+
+struct sendrecv_t {
+  u32 tx_b;
+  u32 rx_b;
+  u64 events;
+};
+BPF_HASH(socket_span, struct sock *, u64);
+BPF_HASH(socket_data, struct sock *, struct sendrecv_t);
 
 // Populate event_data_t from ctx and socket info
 static void build_udp_event(struct pt_regs *ctx, struct sock *sk, struct event_data_t *ed) {
@@ -40,32 +49,80 @@ static void build_udp_event(struct pt_regs *ctx, struct sock *sk, struct event_d
 
 int syscall__udp_sendmsg(struct pt_regs *ctx, struct sock *sk, struct msghdr *msg, size_t len) {
 
-    struct event_data_t edata;
-    // Set 0 padding
-    __builtin_memset(&edata, 0, sizeof(edata));
+    // Look up current socket data, add rx_b, update
 
-    // Set byte count from packet
-    edata.tx_b = (u64) len;
-    edata.rx_b = 0;
+    struct sendrecv_t * srp = socket_data.lookup(&sk);
+    // If missed create, init now
+    struct sendrecv_t sr = {.tx_b = 0, .rx_b = 0, .events = 0};
+    if (srp != 0) {
+      sr = *srp;
+    }
+    sr.tx_b += (u32) len;
+    sr.events += 1;
+    socket_data.update(&sk, &sr);
 
-    // Populate output data
-    build_udp_event(ctx, sk, &edata);
-
-    udp_sockets.perf_submit(ctx, &edata, sizeof(edata));
     return 0;
 }
 
 int syscall__udp_recvmsg (struct pt_regs *ctx, struct sock *sk, struct msghdr *msg, size_t len, int noblock, int flags, int *addr_len) {
 
+
+    // Look up current socket data, add rx_b, update
+
+    struct sendrecv_t * srp = socket_data.lookup(&sk);
+    // If missed create, init now
+    struct sendrecv_t sr = {.tx_b = 0, .rx_b = 0, .events = 0};
+    if (srp != 0) {
+      sr = *srp;
+    }
+    sr.rx_b += (u32) len;
+    sr.events += 1;
+    socket_data.update(&sk, &sr);
+
+    return 0;
+}
+
+// Capture sock creation time, init empty socket data
+int syscall__ip4_datagram_connect(struct pt_regs *ctx, struct sock *sk, struct sockaddr *uaddr, int addr_len) {
+    // Save start time
+    u64 ts = bpf_ktime_get_ns();
+    socket_span.update(&sk, &ts);
+    // Init socket data counter
+    struct sendrecv_t sr = {.tx_b = 0, .rx_b = 0, .events = 0};
+    socket_data.update(&sk, &sr);
+    return 0;
+}
+
+// Calculate span, sav
+int syscall__udp_destroy_sock(struct pt_regs *ctx, struct sock *sk) {
     struct event_data_t edata;
     // Set 0 padding
     __builtin_memset(&edata, 0, sizeof(edata));
 
-    // Set byte count from packet
-    edata.tx_b = 0;
-    edata.rx_b = (u64) len;
+    // calculate lifespan
+    u64 *tsp, delta_us;
+    tsp = socket_span.lookup(&sk);
+    if (tsp == 0) {
+        socket_data.delete(&sk);     // may not exist
+        socket_span.delete(&sk);     // may not exist
+        return 0;                    // missed create
+    }
+    delta_us = (bpf_ktime_get_ns() - *tsp) / 1000;
+    socket_span.delete(&sk);
+    edata.span_us = delta_us;
 
-    // Populate output data
+    // Fetch data counter
+    struct sendrecv_t *srp = socket_data.lookup(&sk);
+    if (srp == 0) {
+        socket_data.delete(&sk);     // may not exist
+        socket_span.delete(&sk);     // may not exist
+        return 0;                    // missed create
+    }
+    edata.tx_b = srp->tx_b;
+    edata.rx_b = srp->rx_b;
+    socket_data.delete(&sk);
+
+    // Load comm, port, addrs into struct
     build_udp_event(ctx, sk, &edata);
 
     udp_sockets.perf_submit(ctx, &edata, sizeof(edata));
