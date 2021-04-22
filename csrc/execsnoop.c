@@ -21,6 +21,7 @@ struct data_t {
     u32 ppid; // Parent PID as in the userspace term (i.e task->real_parent->tgid in kernel)
     u32 uid;
     char comm[TASK_COMM_LEN];
+    char env[MAX_ARGS][ARGSIZE];
     char argv[MAX_ARGS][ARGSIZE];
     int rc;
     u64 span_us;
@@ -56,9 +57,9 @@ int syscall__execve(struct pt_regs *ctx,
     // We use the get_ppid function as a fallback in those cases. (#1883)
     //data.ppid = task->real_parent->tgid;
     data->ppid = task->real_parent->tgid;
-    int max = sizeof(data->argv[0]) - 1;
 
     const char *argp = NULL;
+    int max = sizeof(data->argv[0]) - 1;
 
     #pragma unroll
     for (int i = 0; i < MAX_ARGS; i++) {
@@ -68,11 +69,29 @@ int syscall__execve(struct pt_regs *ctx,
       {
         bpf_probe_read(&(data->argv[i]), max, argp);
       } else {
-        goto out;
+        goto arg_out;
       }
     }
 
-out:
+arg_out:;
+
+    // Get max size of what env we can return
+    const char *envp= NULL;
+    int env_max = sizeof(data->env[0]) - 1;
+
+    #pragma unroll
+    for (int i = 0; i < MAX_ARGS; i++) {
+      envp = NULL;
+      bpf_probe_read_str(&envp, sizeof(envp), (void *)&__envp[i]);
+      if (envp)
+      {
+        bpf_probe_read(&(data->env[i]), max, envp);
+      } else {
+        goto env_out;
+      }
+    }
+
+env_out:;
 
     if (bpf_get_current_comm(&data->comm, sizeof(data->comm)) == 0) {
         data->rc = 0;
