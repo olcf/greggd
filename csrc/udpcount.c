@@ -12,6 +12,7 @@ struct event_data_t {
   u32 rx_b;
   u64 span_us;
   char comm[TASK_COMM_LEN];
+  u64 events;
   u32 uid;
 };
 
@@ -38,7 +39,8 @@ static void build_udp_event(struct pt_regs *ctx, struct sock *sk, struct event_d
     // destination port, switched to host byte order
     //dport = (dport >> 8) | ((dport << 8) & 0x00FF00);
     u16 dport = sk->__sk_common.skc_dport;
-    dport = ntohs(dport);
+    //dport = ntohs(dport);
+    dport = (dport >> 8) | ((dport << 8) & 0x00FF00);
 
     // Load data into struct
     ed->sport = sport;
@@ -108,7 +110,6 @@ int syscall__udp_destroy_sock(struct pt_regs *ctx, struct sock *sk) {
         return 0;                    // missed create
     }
     delta_us = (bpf_ktime_get_ns() - *tsp) / 1000;
-    socket_span.delete(&sk);
     edata.span_us = delta_us;
 
     // Fetch data counter
@@ -120,11 +121,13 @@ int syscall__udp_destroy_sock(struct pt_regs *ctx, struct sock *sk) {
     }
     edata.tx_b = srp->tx_b;
     edata.rx_b = srp->rx_b;
-    socket_data.delete(&sk);
+    edata.events = srp->events;
 
     // Load comm, port, addrs into struct
     build_udp_event(ctx, sk, &edata);
 
     udp_sockets.perf_submit(ctx, &edata, sizeof(edata));
+    socket_data.delete(&sk);
+    socket_span.delete(&sk);
     return 0;
 }
