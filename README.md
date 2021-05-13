@@ -12,6 +12,7 @@ each program, parse it, and send output to a local socket on the host.
 Current eBPF and bcc tooling that "works" as a sensor:
 
   - opensnoop: file open() calls
+  - execsnoop: log exec() syscalls
   - biolatency: block I/O latency histograms
   - tcplife: tcp session lifetime and connection details
 

@@ -1,0 +1,16 @@
+---
+name: build-dev-image
+on: workflow_dispatch
+jobs:
+  build-dev-image:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Build dev image
+        uses: docker/build-push-action@v1
+        with:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ghcr.io
+          repository: olcf/greggd/dev-image
+          tag_with_ref: true
+          context: build/

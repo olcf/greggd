@@ -1,0 +1,20 @@
+---
+name: release
+on: {push: {tags: ['v*.*.*']}}
+jobs:
+  release:
+    runs-on: ubuntu-20.04
+    container: ghcr.io/olcf/greggd/dev-image:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Build
+        run: go build -v ./cmd/greggd/
+      - name: Test
+        run: go test -v ./...
+      - name: Build RPM
+        run: nfpm -f build/nfpm.yaml pkg --packager rpm
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
