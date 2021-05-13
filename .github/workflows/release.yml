@@ -8,12 +8,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+      - name: Export release vars
+        id: vars
+        shell: bash
+        run: |
+          echo "::set-output name=version::$(git describe --tags --abbrev=0)"
+          echo "::set-output name=release::$(git rev-parse --short HEAD)"
       - name: Build
         run: go build -v ./cmd/greggd/
       - name: Test
         run: go test -v ./...
       - name: Build RPM
-        run: nfpm -f build/nfpm.yaml pkg --packager rpm
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+          RELEASE: ${{ steps.vars.outputs.release }}
+        run: |
+          cd build
+          envsubst < nfpm-template.yaml > nfpm.yaml
+          nfpm pkg --packager rpm
       - name: Release
         uses: softprops/action-gh-release@v1
         env:
