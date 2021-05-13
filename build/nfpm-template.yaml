@@ -9,6 +9,6 @@ description: |
 depends:
   - bcc
 files:
-  ./cmd/greggd/greggd: "/usr/sbin/greggd"
+  ./greggd: "/usr/sbin/greggd"
   ./csrc/**: "/usr/share/greggd/c/"
   ./init/greggd.service: "/usr/lib/systemd/system/greggd.service"
