@@ -23,9 +23,8 @@ jobs:
           VERSION: ${{ steps.vars.outputs.version }}
           RELEASE: ${{ steps.vars.outputs.release }}
         run: |
-          cd build
-          envsubst < nfpm-template.yaml > nfpm.yaml
-          nfpm pkg --packager rpm
+          envsubst < build/nfpm-template.yaml > build/nfpm.yaml
+          nfpm -f build/nfpm.yaml pkg --packager rpm
       - name: Release
         uses: softprops/action-gh-release@v1
         env:
