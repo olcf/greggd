@@ -8,7 +8,10 @@ description: |
   Global runtime for eBPF-enabled gathering (w/ gumption) daemon
 depends:
   - bcc
-files:
-  ./greggd: "/usr/sbin/greggd"
-  ./csrc/**: "/usr/share/greggd/c/"
-  ./init/greggd.service: "/usr/lib/systemd/system/greggd.service"
+contents:
+  - src: ./greggd
+    dst: /usr/sbin/greggd
+  - src: ./csrc/**
+    dst: /usr/share/greggd/c/
+  - src: ./init/greggd.service
+    dst: /usr/lib/systemd/system/greggd.service
