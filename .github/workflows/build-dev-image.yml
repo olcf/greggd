@@ -1,6 +1,6 @@
 ---
 name: build-dev-image
-on: workflow_dispatch
+on: [workflow_dispatch, push]
 jobs:
   build-dev-image:
     runs-on: ubuntu-20.04
