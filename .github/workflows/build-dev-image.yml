@@ -21,4 +21,4 @@ jobs:
           context: build/
           pull: true
           push: true
-          tags: olcf/greggd/dev-image:8.3_20210513
+          tags: ghcr.io/olcf/greggd/dev-image:8.3_20210513
