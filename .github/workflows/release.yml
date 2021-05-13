@@ -1,6 +1,6 @@
 ---
 name: release
-on: [push]
+on: {push: {tags: ['*.*.*']}}
 jobs:
   release:
     runs-on: ubuntu-20.04
