@@ -1,0 +1,17 @@
+---
+name: "greggd"
+arch: "amd64"
+version: "${VERSION}"
+release: "${RELEASE}"
+homepage: "github.com/olcf/greggd"
+description: |
+  Global runtime for eBPF-enabled gathering (w/ gumption) daemon
+depends:
+  - bcc
+contents:
+  - src: ./greggd
+    dst: /usr/sbin/greggd
+  - src: ./csrc/**
+    dst: /usr/share/greggd/c/
+  - src: ./init/greggd.service
+    dst: /usr/lib/systemd/system/greggd.service
