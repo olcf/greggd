@@ -115,7 +115,7 @@ func TestParseConfigCompleteExample(t *testing.T) {
 					{Name: "id", Type: "u64"}, {Name: "fname", Type: "char[255]", IsTag: true}}}}},
 		},
 	}
-	f, err := os.Open("testdata/example_config.yaml")
+	f, err := os.Open("test/data/example_config.yaml")
 	if err != nil {
 		t.Errorf("Error thrown when opening config file test fixture: %v", err)
 		return
