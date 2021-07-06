@@ -4,6 +4,13 @@ on: [push]
 jobs:
   build-binary:
     runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        include:
+          - arch: aarch64
+            distro: ubuntu20.04
+          - arch: ppc64le
+            distro: ubuntu20.04
     container: ghcr.io/olcf/greggd/dev-image:8.3_20210513
     steps:
       - name: Checkout
@@ -15,5 +22,5 @@ jobs:
       - name: Save artifact
         uses: actions/upload-artifact@v2
         with:
-          name: greggd
+          name: greggd.${{ matrix.arch }}
           path: greggd
