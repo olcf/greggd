@@ -21,4 +21,5 @@ jobs:
           context: build/
           pull: true
           push: true
-          tags: ghcr.io/olcf/greggd/dev-image:8.3_20210513
+          platforms: linux/amd64,linux/ppc64le
+          tags: ghcr.io/olcf/greggd/dev-image:8.3_20210706
