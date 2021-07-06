@@ -38,10 +38,12 @@ archive:
 
 .PHONY: srpm
 srpm:
+	mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 	make archive
 	cp $(GREGGD_ARCHIVE) ~/rpmbuild/SOURCES
 	rpmbuild -bs ./build/greggd.spec
 
 .PHONY: rpm
 rpm:
+	mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 	rpmbuild -bb ./build/greggd.spec
