@@ -19,7 +19,7 @@ jobs:
         run: |
           make srpm
           make rpm
-          cp ~/rpmbuild/SRPMS/*/greggd*.rpm .
+          cp ~/rpmbuild/SRPMS/greggd*.rpm .
           cp ~/rpmbuild/RPMS/*/greggd*.rpm .
       - name: Release
         uses: softprops/action-gh-release@v1
