@@ -11,27 +11,22 @@ jobs:
         # No shallow clone
         with:
           fetch-depth: 0
-      - name: Export release vars
-        id: vars
-        shell: bash
-        run: |
-          echo "::set-output name=version::$(git describe --tags --abbrev=0)"
-          echo "::set-output name=release::$(git rev-parse --short HEAD)"
       - name: Build
-        run: go build -v ./cmd/greggd/
+        run: make test
       - name: Test
-        run: go test -v ./...
+        run: make test
       - name: Build RPM
-        env:
-          VERSION: ${{ steps.vars.outputs.version }}
-          RELEASE: ${{ steps.vars.outputs.release }}
         run: |
-          envsubst < build/nfpm-template.yaml > build/nfpm.yaml
-          nfpm -f build/nfpm.yaml pkg --packager rpm
+          make srpm
+          make rpm
+          cp ~/rpmbuild/SRPMS/*/greggd*.rpm
+          cp ~/rpmbuild/RPMS/*/greggd*.rpm
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: greggd*.rpm
+          files: |
+            greggd*.rpm
+            greggd*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
