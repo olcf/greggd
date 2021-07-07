@@ -8,9 +8,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            image: ghcr.io/olcf/greggd/dev-image:8.3_20210706
+            image: docker://ghcr.io/olcf/greggd/dev-image:8.3_20210706
           - arch: ppc64le
-            image: ghcr.io/olcf/greggd/dev-image:8.3_20210706
+            image: docker://ghcr.io/olcf/greggd/dev-image:8.3_20210706
     container: ghcr.io/olcf/greggd/dev-image:8.3_20210513
     steps:
       - name: Checkout
@@ -18,7 +18,7 @@ jobs:
       - name: Build
         env:
           DOCKER_DEFAULT_PLATFORM: ${{ matrix.arch }}
-        uses: docker://${{ matrix.image }}
+        uses: ${{ matrix.image }}
         with:
           args: 'uname -a && make build'
       - name: Test
