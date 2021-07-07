@@ -8,25 +8,29 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            image: docker://ghcr.io/olcf/greggd/dev-image:8.3_20210706
+            image: ghcr.io/olcf/greggd/dev-image:8.3_20210706
           - arch: ppc64le
-            image: docker://ghcr.io/olcf/greggd/dev-image:8.3_20210706
+            image: ghcr.io/olcf/greggd/dev-image:8.3_20210706
     container: ghcr.io/olcf/greggd/dev-image:8.3_20210513
     steps:
+      - run: |
+          docker run --rm --privileged \
+          multiarch/qemu-user-static:register --reset
       - name: Checkout
         uses: actions/checkout@v2
       - name: Build
-        env:
-          DOCKER_DEFAULT_PLATFORM: ${{ matrix.arch }}
-        uses: ${{ matrix.image }}
-        with:
-          args: 'uname -a && make build'
+        run: |
+          docker run --rm --platform ${{ matrix.arch }} \
+          --workdir  "${GITHUB_WORKSPACE}" \
+          -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}" \
+          ${{ matrix.image }} \
+          "uname -a && make build"
       - name: Test
-        env:
-          DOCKER_DEFAULT_PLATFORM: ${{ matrix.arch }}
-        uses: docker://${{ matrix.image }}
-        with:
-          args: make test
+        run: |
+          docker run --rm --platform ${{ matrix.arch }} \
+          --workdir  "${GITHUB_WORKSPACE}" \
+          -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}" \
+          ${{ matrix.image }} "make test"
       - name: Save artifact
         uses: actions/upload-artifact@v2
         with:
