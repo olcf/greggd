@@ -11,7 +11,6 @@ jobs:
             image: ghcr.io/olcf/greggd/dev-image:8.3_20210706
           - arch: ppc64le
             image: ghcr.io/olcf/greggd/dev-image:8.3_20210706
-    container: ghcr.io/olcf/greggd/dev-image:8.3_20210513
     steps:
       - run: |
           docker run --rm --privileged \
