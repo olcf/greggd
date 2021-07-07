@@ -4,25 +4,10 @@ on: [push]
 jobs:
   build-binary:
     runs-on: ubuntu-20.04
-    container: ghcr.io/olcf/greggd/dev-image:8.3_20210513
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Build
-        run: make build
-      - name: Test
-        run: make test
-      - name: Save artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: greggd.amd64
-          path: greggd
-  build-non-x86-binary:
-    runs-on: ubuntu-20.04
     strategy:
       matrix:
         include:
-          - arch: aarch64
+          - arch: amd64
             image: ghcr.io/olcf/greggd/dev-image:8.3_20210706
           - arch: ppc64le
             image: ghcr.io/olcf/greggd/dev-image:8.3_20210706
@@ -31,8 +16,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Build
-        run: make build
+        env:
+          DOCKER_DEFAULT_PLATFORM: ${{ matrix.arch }}
+        uses: docker://${{ matrix.image }}
+        run: uname -a && make build
       - name: Test
+        env:
+          DOCKER_DEFAULT_PLATFORM: ${{ matrix.arch }}
+        uses: docker://${{ matrix.image }}
         run: make test
       - name: Save artifact
         uses: actions/upload-artifact@v2
