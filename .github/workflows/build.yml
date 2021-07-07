@@ -19,12 +19,14 @@ jobs:
         env:
           DOCKER_DEFAULT_PLATFORM: ${{ matrix.arch }}
         uses: docker://${{ matrix.image }}
-        run: uname -a && make build
+        with:
+          args: 'uname -a && make build'
       - name: Test
         env:
           DOCKER_DEFAULT_PLATFORM: ${{ matrix.arch }}
         uses: docker://${{ matrix.image }}
-        run: make test
+        with:
+          args: make test
       - name: Save artifact
         uses: actions/upload-artifact@v2
         with:
