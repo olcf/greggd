@@ -23,13 +23,14 @@ jobs:
           --workdir  "${GITHUB_WORKSPACE}" \
           -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}" \
           ${{ matrix.image }} \
-          "uname -a && make build"
+          /bin/bash -c "uname -a && make build"
       - name: Test
         run: |
           docker run --rm --platform ${{ matrix.arch }} \
           --workdir  "${GITHUB_WORKSPACE}" \
           -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}" \
-          ${{ matrix.image }} "make test"
+          ${{ matrix.image }} \
+          /bin/bash -c "make test"
       - name: Save artifact
         uses: actions/upload-artifact@v2
         with:
