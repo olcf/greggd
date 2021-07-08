@@ -8,9 +8,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            image: ghcr.io/olcf/greggd/dev-image:8.3_20210706
+            image: ghcr.io/olcf/greggd/dev-image:8.3_20210706-amd64
           - arch: ppc64le
-            image: ghcr.io/olcf/greggd/dev-image:8.3_20210706
+            image: ghcr.io/olcf/greggd/dev-image:8.3_20210706-ppc64le
     steps:
       - run: |
           docker run --rm --privileged \
