@@ -12,6 +12,7 @@ jobs:
           - arch: ppc64le
             image: ghcr.io/olcf/greggd/dev-image:8.3_20210706-ppc64le
     steps:
+      - run: sudo apt-get install qemu binfmt-support qemu-user-static
       - run: |
           docker run --rm --privileged \
           multiarch/qemu-user-static:5.2.0-2 --reset
