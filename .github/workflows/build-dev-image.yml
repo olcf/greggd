@@ -16,7 +16,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
           registry: ghcr.io
       - name: Build dev image
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           context: build/
           pull: true
