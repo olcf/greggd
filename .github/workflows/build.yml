@@ -13,7 +13,7 @@ jobs:
       - name: Test
         run: go test -v ./...
       - name: Save artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3.1.0
         with:
           name: greggd
           path: greggd
