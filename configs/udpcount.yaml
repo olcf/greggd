@@ -1,0 +1,53 @@
+---
+globals:
+  socketPath: "/var/run/telegraf.sock"
+  verboseFormat: influx
+programs:
+  - source: /usr/share/greggd/c/udpcount.c
+    # Events to bind program to
+    events:
+      - type: kprobe
+        loadFunc: syscall__udp_sendmsg
+        attachTo: udp_sendmsg
+      - type: kprobe
+        loadFunc: syscall__udp_recvmsg
+        attachTo: udp_recvmsg
+      - type: kprobe
+        loadFunc: syscall__ip4_datagram_connect
+        attachTo: ip4_datagram_connect
+      - type: kprobe
+        loadFunc: syscall__udp_destroy_sock
+        attachTo: udp_destroy_sock
+    outputs:
+      - type: BPF_PERF_OUTPUT
+        id: udp_sockets
+        format:
+          - name: pid
+            type: u32
+            isTag: true
+          - name: saddr
+            type: u32
+            isIP: true
+          - name: raddr
+            type: u32
+            isIP: true
+          - name: sport
+            type: u16
+            isTag: true
+          - name: rport
+            type: u16
+            isTag: true
+          - name: tx_b
+            type: u32
+          - name: rx_b
+            type: u32
+          - name: span
+            type: u64
+          - name: comm
+            type: char[16]
+            isTag: true
+          - name: events
+            type: u64
+          - name: uid
+            type: u32
+            isTag: true
