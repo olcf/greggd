@@ -7,7 +7,7 @@ jobs:
     container: ghcr.io/olcf/greggd/dev-image:8.3_20210513
     steps:
       - name: Checkout
-        uses: actions/checkout@v3.5.1
+        uses: actions/checkout@v3.5.3
       - name: Build
         run: go build -v ./cmd/greggd/
       - name: Test
