@@ -29,7 +29,7 @@ jobs:
           envsubst < build/nfpm-template.yaml > build/nfpm.yaml
           nfpm -f build/nfpm.yaml pkg --packager rpm
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: greggd*.rpm
