@@ -4,6 +4,11 @@ on: [workflow_dispatch]
 jobs:
   build-dev-image:
     runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+          - arch: ppc64le
     steps:
       - name: Checkout
         uses: actions/checkout@v4.2.2
@@ -21,4 +26,5 @@ jobs:
           context: build/
           pull: true
           push: true
-          tags: ghcr.io/olcf/greggd/dev-image:8.3_20210513
+          platforms: linux/${{ matrix.arch }}
+          tags: ghcr.io/olcf/greggd/dev-image:8.3_20210706-${{ matrix.arch }}

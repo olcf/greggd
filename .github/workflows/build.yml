@@ -4,16 +4,36 @@ on: [push]
 jobs:
   build-binary:
     runs-on: ubuntu-20.04
-    container: ghcr.io/olcf/greggd/dev-image:8.3_20210513
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            image: ghcr.io/olcf/greggd/dev-image:8.3_20210706-amd64
+          - arch: ppc64le
+            image: ghcr.io/olcf/greggd/dev-image:8.3_20210706-ppc64le
     steps:
+      - run: sudo apt-get install qemu binfmt-support qemu-user-static
+      - run: |
+          docker run --rm --privileged \
+          multiarch/qemu-user-static:5.2.0-2 --reset
       - name: Checkout
         uses: actions/checkout@v4.2.2
       - name: Build
-        run: go build -v ./cmd/greggd/
+        run: |
+          docker run --rm --platform ${{ matrix.arch }} \
+          --workdir  "${GITHUB_WORKSPACE}" \
+          -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}" \
+          ${{ matrix.image }} \
+          /bin/bash -c "uname -a && make build"
       - name: Test
-        run: go test -v ./...
+        run: |
+          docker run --rm --platform ${{ matrix.arch }} \
+          --workdir  "${GITHUB_WORKSPACE}" \
+          -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}" \
+          ${{ matrix.image }} \
+          /bin/bash -c "make test"
       - name: Save artifact
         uses: actions/upload-artifact@v4.4.3
         with:
-          name: greggd
+          name: greggd.${{ matrix.arch }}
           path: greggd
